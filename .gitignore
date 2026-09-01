@@ -63,3 +63,11 @@ watch_folders/99_FAILED/*
 
 # Local user configs / secrets
 config/config.local.yaml
+
+# Node / Electron build artifacts
+node_modules/
+.vite/
+out/
+dist-electron/
+bin/
+*.dSYM/
