@@ -2,7 +2,6 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const yaml = require('js-yaml');
 const os = require('os');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -140,6 +139,26 @@ function resolveProjectRootDir() {
   return process.cwd();
 }
 
+function dumpSimpleYaml(obj, indent = 0) {
+  let lines = [];
+  const pad = ' '.repeat(indent);
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === null || value === undefined) {
+      lines.push(`${pad}${key}: null`);
+    } else if (typeof value === 'object' && !Array.isArray(value)) {
+      lines.push(`${pad}${key}:`);
+      lines.push(dumpSimpleYaml(value, indent + 2));
+    } else if (Array.isArray(value)) {
+      lines.push(`${pad}${key}: [${value.map(v => JSON.stringify(v)).join(', ')}]`);
+    } else if (typeof value === 'string') {
+      lines.push(`${pad}${key}: "${value.replace(/"/g, '\\"')}"`);
+    } else {
+      lines.push(`${pad}${key}: ${value}`);
+    }
+  }
+  return lines.join('\n');
+}
+
 function generateRuntimeYaml(rootFolder, config) {
   const configObj = {
     storage: {
@@ -184,7 +203,7 @@ function generateRuntimeYaml(rootFolder, config) {
     }
   };
 
-  const yamlStr = yaml.dump(configObj);
+  const yamlStr = dumpSimpleYaml(configObj);
   const tempPath = path.join(os.tmpdir(), 'braw_electron_config.yaml');
   fs.writeFileSync(tempPath, yamlStr, 'utf8');
   return tempPath;
