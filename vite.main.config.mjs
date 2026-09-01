@@ -15,8 +15,7 @@ export default defineConfig({
         'events',
         'stream',
         'util',
-        'url',
-        'js-yaml'
+        'url'
       ],
       output: {
         entryFileNames: 'main.js',
