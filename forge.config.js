@@ -86,5 +86,20 @@ module.exports = {
         ],
       },
     },
+    // NOTE: FusesPlugin is disabled until proper Apple code signing is configured.
+    // When fuses are flipped with ad-hoc signing (identity: '-'), macOS detects the
+    // modified binary as having an invalid code signature and kills the process with
+    // SIGKILL (Code Signature Invalid) at electron::fuses::IsRunAsNodeEnabled().
+    // Re-enable when APPLE_SIGN_IDENTITY is set to a valid Developer ID.
+    //
+    // new FusesPlugin({
+    //   version: FuseVersion.V1,
+    //   [FuseV1Options.RunAsNode]: false,
+    //   [FuseV1Options.EnableCookieEncryption]: true,
+    //   [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+    //   [FuseV1Options.EnableNodeCliInspectArguments]: false,
+    //   [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: false,
+    //   [FuseV1Options.OnlyLoadAppFromAsar]: true,
+    // }),
   ],
 };

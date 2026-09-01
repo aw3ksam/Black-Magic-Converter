@@ -198,3 +198,22 @@ npm run make
 ```bash
 pytest tests/
 ```
+
+---
+
+## 8. Version 3.1.1 — Packaged App Startup, Code Signing & Diagnostics Post-Mortem
+
+### 8.1 Issues Identified
+
+1. **Uncaught Exception: `Cannot find module 'js-yaml'` in Packaged Binary**
+   - **Root Cause**: `@electron-forge/plugin-vite` does not package `node_modules` into `app.asar`. Since `js-yaml` was treated as an external dependency at runtime, `require('js-yaml')` threw a fatal error immediately on app boot when launching from `.app`.
+   - **Solution**: Implemented an in-process, zero-dependency `serializeToYaml()` serializer in `src/electron/main/index.js` (tailored for config dictionary structures) and removed `js-yaml` from `package.json`.
+
+2. **Silent Startup Crash with macOS `SIGKILL (Code Signature Invalid)`**
+   - **Root Cause**: When Electron Forge's `FusesPlugin` flipped fuse bits on the prebuilt Electron binary while running with ad-hoc signing (`identity: '-'`), macOS Gatekeeper detected binary tampering and killed the process (`EXC_BAD_ACCESS / SIGKILL` on `electron::fuses::IsRunAsNodeEnabled()`) prior to executing JavaScript.
+   - **Solution**: Commented out `FusesPlugin` execution in `forge.config.js` for ad-hoc signing environments, with documented instructions to re-enable when developer ID certificates (`APPLE_SIGN_IDENTITY`) are present.
+
+3. **Lack of Main-Process Diagnostic Telemetry & Headless Crash Visibility**
+   - **Root Cause**: Startup crashes before `BrowserWindow` creation provided zero visual feedback or logs, making issues invisible outside of system-level `.ips` crash logs.
+   - **Solution**: Added comprehensive file-based diagnostic logging (`debugLog()`) writing to `~/Library/Logs/BlackMagicConverter/main.log` (macOS), `%APPDATA%/BlackMagicConverter/logs/main.log` (Windows), and `~/.config/BlackMagicConverter/logs/main.log` (Linux). Added native crash popup alerts via `dialog.showErrorBox()` on `uncaughtException` and `unhandledRejection`. Wrapped `electron-squirrel-startup` in safe error guards.
+

@@ -25,14 +25,14 @@ This document defines the core architecture rules, build guidelines, and securit
   * `"test": "..."` — Runs test suite.
 
 ### Vite Config Files
-* **`vite.main.config.mjs`**: Must output `entryFileNames: 'main.js'` and externalize Node built-ins (`electron`, `child_process`, `fs`, `path`, `os`, `js-yaml`).
+* **`vite.main.config.mjs`**: Must output `entryFileNames: 'main.js'` and externalize Node built-ins (`electron`, `child_process`, `fs`, `path`, `os`). **Note**: Keep main process dependencies zero-external (like inline YAML serialization) since Electron ASAR packaging does not bundle `node_modules`.
 * **`vite.preload.config.mjs`**: Must output `entryFileNames: 'preload.js'` and externalize `electron`.
 * **`vite.renderer.config.mjs`**: Bundles the UI from `src/electron/renderer/`.
 
 ### Forge Config (`forge.config.js`)
 * Keep `packagerConfig` referencing `./assets/icons/icon` (resolves `.icns`, `.ico`, `.png` automatically).
 * Keep macOS code signing entitlements pointing to `./entitlements/entitlements.mac.plist` and `./entitlements/entitlements.mac.inherit.plist`.
-* Do not remove the `FusesPlugin` configuration without an explicit security reason.
+* **FusesPlugin Note**: FusesPlugin is commented out during ad-hoc signing (`identity: '-'`) because modifying fuse bits after ad-hoc signing invalidates the macOS code signature (`SIGKILL (Code Signature Invalid)`). Re-enable when `APPLE_SIGN_IDENTITY` is configured for developer ID signing.
 
 ---
 

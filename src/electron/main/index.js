@@ -2,12 +2,83 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const yaml = require('js-yaml');
 const os = require('os');
 
+// ═══════════════════════════════════════════════════════════════════
+// DEBUG INFRASTRUCTURE — File Logger & Startup Diagnostics
+// macOS logs:   ~/Library/Logs/BlackMagicConverter/main.log
+// Windows logs: %APPDATA%/BlackMagicConverter/logs/main.log
+// Linux logs:   ~/.config/BlackMagicConverter/logs/main.log
+// ═══════════════════════════════════════════════════════════════════
+
+function getLogDirectory() {
+  if (process.platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Logs', 'BlackMagicConverter');
+  } else if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA || os.homedir(), 'BlackMagicConverter', 'logs');
+  }
+  return path.join(os.homedir(), '.config', 'BlackMagicConverter', 'logs');
+}
+
+const LOG_DIR = getLogDirectory();
+const LOG_FILE = path.join(LOG_DIR, 'main.log');
+
+try {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+  // Truncate log on fresh launch so it doesn't grow unbounded
+  fs.writeFileSync(LOG_FILE, '', 'utf8');
+} catch (_e) {
+  // If we can't create the log dir, we'll still have console output
+}
+
+function debugLog(tag, message, data) {
+  const timestamp = new Date().toISOString();
+  const line = data !== undefined
+    ? `[${timestamp}] [${tag}] ${message} ${typeof data === 'string' ? data : JSON.stringify(data)}`
+    : `[${timestamp}] [${tag}] ${message}`;
+  console.log(line);
+  try {
+    fs.appendFileSync(LOG_FILE, line + '\n');
+  } catch (_e) {
+    // Swallow file write errors
+  }
+}
+
+debugLog('STARTUP', '══════════════════════════════════════════════════');
+debugLog('STARTUP', 'Main process loaded');
+debugLog('STARTUP', `Electron: ${process.versions.electron} | Node: ${process.versions.node} | Chrome: ${process.versions.chrome}`);
+debugLog('STARTUP', `Platform: ${process.platform} ${process.arch}`);
+debugLog('STARTUP', `app.getAppPath(): ${app.getAppPath()}`);
+debugLog('STARTUP', `process.resourcesPath: ${process.resourcesPath}`);
+debugLog('STARTUP', `process.cwd(): ${process.cwd()}`);
+debugLog('STARTUP', `__dirname: ${__dirname}`);
+debugLog('STARTUP', `app.isPackaged: ${app.isPackaged}`);
+debugLog('STARTUP', `Log file: ${LOG_FILE}`);
+
+// Global uncaught exception handler — shows native error dialog
+process.on('uncaughtException', (error) => {
+  const msg = `Uncaught Exception:\n${error.stack || error.message || String(error)}`;
+  debugLog('FATAL', msg);
+  try {
+    dialog.showErrorBox('Black Magic Converter — Fatal Error',
+      `${msg}\n\nLog file: ${LOG_FILE}`);
+  } catch (_e) {
+    // dialog may not be available if app hasn't initialized yet
+  }
+});
+
+process.on('unhandledRejection', (reason) => {
+  debugLog('FATAL', `Unhandled Promise Rejection: ${reason}`);
+});
+
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
-  app.quit();
+try {
+  if (require('electron-squirrel-startup')) {
+    app.quit();
+  }
+  debugLog('STARTUP', 'electron-squirrel-startup check passed');
+} catch (e) {
+  debugLog('STARTUP', `electron-squirrel-startup not available (expected on non-Windows): ${e.message}`);
 }
 
 let mainWindow = null;
@@ -33,16 +104,24 @@ const REQUIRED_SUBDIRECTORIES = [
 ];
 
 function resolveDefaultRootFolder() {
-  const defaultWatch = path.join(app.getAppPath(), 'watch_folders');
+  const appPath = app.getAppPath();
+  const defaultWatch = path.join(appPath, 'watch_folders');
+  debugLog('PATHS', `resolveDefaultRootFolder: appPath=${appPath}`);
+  debugLog('PATHS', `resolveDefaultRootFolder: checking ${defaultWatch}`);
   if (fs.existsSync(defaultWatch)) {
+    debugLog('PATHS', `resolveDefaultRootFolder: ✅ found watch_folders at appPath`);
     return defaultWatch;
   }
-  return path.join(process.cwd(), 'watch_folders');
+  const cwdWatch = path.join(process.cwd(), 'watch_folders');
+  debugLog('PATHS', `resolveDefaultRootFolder: falling back to CWD: ${cwdWatch}`);
+  return cwdWatch;
 }
 
 let activeRootFolder = resolveDefaultRootFolder();
+debugLog('PATHS', `activeRootFolder = ${activeRootFolder}`);
 
 function createWindow() {
+  debugLog('STARTUP', 'createWindow() called');
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 760,
@@ -63,15 +142,44 @@ function createWindow() {
 
   // Load Vite Dev Server URL or bundled index.html
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    debugLog('STARTUP', `Loading dev server URL: ${MAIN_WINDOW_VITE_DEV_SERVER_URL}`);
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
-    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+    const rendererPath = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
+    debugLog('STARTUP', `Loading renderer file: ${rendererPath}`);
+    mainWindow.loadFile(rendererPath);
   }
 
+  // Debug: renderer load events
+  mainWindow.webContents.on('did-finish-load', () => {
+    debugLog('STARTUP', '✅ Renderer did-finish-load');
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    debugLog('ERROR', `Renderer did-fail-load: code=${errorCode} desc="${errorDescription}" url=${validatedURL}`);
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    debugLog('FATAL', 'Render process gone', details);
+  });
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const levelNames = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
+    debugLog('RENDERER', `[${levelNames[level] || level}] ${message} (${sourceId}:${line})`);
+  });
+
+  mainWindow.on('ready-to-show', () => {
+    debugLog('STARTUP', '✅ Window ready-to-show');
+  });
+
   mainWindow.on('closed', () => {
+    debugLog('LIFECYCLE', 'Main window closed');
     mainWindow = null;
     stopWatcherProcess();
   });
+
+  mainWindow.show();
+  debugLog('STARTUP', '✅ BrowserWindow created and show() called');
 }
 
 function validateAndProvisionDirectories(rootFolder) {
@@ -132,12 +240,51 @@ function resolveProjectRootDir() {
     path.dirname(app.getAppPath()),
     process.cwd(),
   ];
+  debugLog('PATHS', 'resolveProjectRootDir candidates:', candidates);
   for (const c of candidates) {
-    if (c && fs.existsSync(path.join(c, 'src', 'cli.py'))) {
+    const cliPath = path.join(c, 'src', 'cli.py');
+    const exists = fs.existsSync(cliPath);
+    debugLog('PATHS', `  checking ${cliPath} → ${exists ? '✅ FOUND' : '✗ not found'}`);
+    if (c && exists) {
+      debugLog('PATHS', `resolveProjectRootDir: using ${c}`);
       return c;
     }
   }
+  debugLog('PATHS', `resolveProjectRootDir: ⚠ no cli.py found, falling back to CWD: ${process.cwd()}`);
   return process.cwd();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Inline YAML Serializer — replaces js-yaml npm dependency entirely.
+// Only needs to handle: nested objects, arrays, strings, numbers, booleans.
+// Output is consumed by Python's yaml.safe_load().
+// ═══════════════════════════════════════════════════════════════════
+function serializeToYaml(obj, indent = 0) {
+  const prefix = '  '.repeat(indent);
+  let output = '';
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === null || value === undefined) {
+      output += `${prefix}${key}: null\n`;
+    } else if (Array.isArray(value)) {
+      output += `${prefix}${key}:\n`;
+      for (const item of value) {
+        output += typeof item === 'string'
+          ? `${prefix}  - '${item.replace(/'/g, "''")}'
+`
+          : `${prefix}  - ${item}\n`;
+      }
+    } else if (typeof value === 'object') {
+      output += `${prefix}${key}:\n`;
+      output += serializeToYaml(value, indent + 1);
+    } else if (typeof value === 'string') {
+      output += `${prefix}${key}: '${value.replace(/'/g, "''")}'
+`;
+    } else {
+      // numbers, booleans
+      output += `${prefix}${key}: ${value}\n`;
+    }
+  }
+  return output;
 }
 
 function generateRuntimeYaml(rootFolder, config) {
@@ -185,7 +332,8 @@ function generateRuntimeYaml(rootFolder, config) {
     }
   };
 
-  const yamlStr = yaml.dump(configObj);
+  const yamlStr = serializeToYaml(configObj);
+  debugLog('ENGINE', `Generated runtime YAML config (${yamlStr.length} bytes)`);
   const tempPath = path.join(os.tmpdir(), 'braw_electron_config.yaml');
   fs.writeFileSync(tempPath, yamlStr, 'utf8');
   return tempPath;
@@ -432,16 +580,30 @@ ipcMain.handle('system:openExternal', async (_event, url) => {
 });
 
 app.whenReady().then(() => {
-  createWindow();
+  debugLog('STARTUP', '══ Electron app.whenReady() fired ══');
+  try {
+    createWindow();
+    debugLog('STARTUP', '✅ createWindow() completed successfully');
+  } catch (err) {
+    debugLog('FATAL', `createWindow() threw: ${err.stack || err.message}`);
+    dialog.showErrorBox('Black Magic Converter — Startup Error',
+      `Failed to create window:\n\n${err.stack || err.message}\n\nLog file: ${LOG_FILE}`);
+  }
 
   app.on('activate', () => {
+    debugLog('LIFECYCLE', 'App activate event');
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      try {
+        createWindow();
+      } catch (err) {
+        debugLog('FATAL', `createWindow() on activate threw: ${err.stack || err.message}`);
+      }
     }
   });
 });
 
 app.on('window-all-closed', () => {
+  debugLog('LIFECYCLE', 'All windows closed');
   stopWatcherProcess();
   if (process.platform !== 'darwin') {
     app.quit();
@@ -449,5 +611,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  debugLog('LIFECYCLE', 'App before-quit — cleaning up watcher process');
   stopWatcherProcess();
 });
