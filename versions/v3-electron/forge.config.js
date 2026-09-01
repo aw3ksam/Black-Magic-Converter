@@ -9,12 +9,20 @@ module.exports = {
     appCategoryType: 'public.app-category.video',
     icon: './assets/icons/icon',
     asar: true,
-    osxSign: {
-      entitlements: './entitlements/entitlements.mac.plist',
-      'entitlements-inherit': './entitlements/entitlements.mac.inherit.plist',
-      'hardened-runtime': true,
-      'gatekeeper-assess': false,
-    },
+    osxSign: process.env.APPLE_ID || process.env.APPLE_SIGN_IDENTITY
+      ? {
+          identity: process.env.APPLE_SIGN_IDENTITY,
+          entitlements: './entitlements/entitlements.mac.plist',
+          'entitlements-inherit': './entitlements/entitlements.mac.inherit.plist',
+          'hardened-runtime': true,
+          'gatekeeper-assess': false,
+        }
+      : {
+          identity: '-',
+          entitlements: './entitlements/entitlements.mac.plist',
+          'entitlements-inherit': './entitlements/entitlements.mac.inherit.plist',
+          'hardened-runtime': false,
+        },
     osxNotarize: process.env.APPLE_ID
       ? {
           appleId: process.env.APPLE_ID,
@@ -47,36 +55,13 @@ module.exports = {
         format: 'ULFO',
       },
     },
-    {
-      name: '@electron-forge/maker-deb',
-      config: {
-        options: {
-          icon: './assets/icons/icon.png',
-          categories: ['AudioVideo', 'Video'],
-          description: 'Automated Blackmagic RAW Transcoder & Workstation',
-        },
-      },
-    },
-    {
-      name: '@electron-forge/maker-rpm',
-      config: {
-        options: {
-          icon: './assets/icons/icon.png',
-          categories: ['AudioVideo', 'Video'],
-          description: 'Automated Blackmagic RAW Transcoder & Workstation',
-        },
-      },
-    },
   ],
   plugins: [
     {
       name: '@electron-forge/plugin-vite',
       config: {
-        // `build` can specify multiple entry builds, which can be Main process, Preload scripts,
-        // Worker process, etc.
         build: [
           {
-            // `entry` is an alias for `build.lib.entry` in the corresponding Vite config
             entry: 'src/electron/main/index.js',
             config: 'vite.main.config.mjs',
             target: 'main',
@@ -95,16 +80,5 @@ module.exports = {
         ],
       },
     },
-    // Fuses are used to enable/disable various Electron functionality
-    // at package time, before code signing the application
-    new FusesPlugin({
-      version: FuseVersion.V1,
-      [FuseV1Options.RunAsNode]: false,
-      [FuseV1Options.EnableCookieEncryption]: true,
-      [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
-      [FuseV1Options.EnableNodeCliInspectArguments]: false,
-      [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-      [FuseV1Options.OnlyLoadAppFromAsar]: true,
-    }),
   ],
 };
