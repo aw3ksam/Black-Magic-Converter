@@ -8,45 +8,72 @@ An automated ingest and high-performance video transcoding suite for Blackmagic 
 
 ```text
 davinci-braw/
-├── BRAW SDK/          # Official Blackmagic RAW SDK libraries, headers, docs, and samples (macOS, Win, Linux, iPadOS)
-├── Documents/         # Reference manuals, Gen 5 Color Science guide, and DaVinci Resolve headless API documentation
+├── Documents/         # Technical documentation, color science reference, and official Blackmagic RAW SDK
+│   ├── Blackmagic Generation 5 Color Science Technical Reference.pdf
+│   ├── Blackmagic RAW SDK/     # Official BRAW SDK (Mac, Win, Linux, iPadOS frameworks, headers, & samples)
+│   ├── BlackmagicRAW-SDK.pdf   # Official Blackmagic RAW SDK manual
+│   └── headless-api.md         # DaVinci Resolve headless scripting API reference
 ├── changelog/         # Architecture specifications, changelogs, and deep-dive developer documentation
+│   ├── README.md
+│   └── V2_GUI_CHANGELOG.md
 ├── config/            # YAML configuration files for render presets, watch folder paths, stability guards, and LUTs
+│   ├── config.default.yaml
+│   └── config.yaml
 ├── logs/              # Runtime log outputs for CLI, background daemon, project manager, and render pipeline
 ├── scripts/           # Shell automation scripts to launch headless Resolve, watcher daemons, and the native GUI
+│   ├── run_headless_dvr.sh
+│   ├── start_gui.sh
+│   └── start_watcher.sh
 ├── src/               # Core Python automation engine (CLI, watcher, DaVinci Resolve Scripting API client)
+│   ├── common/        # Shared configuration loader, structured logging, and watch-folder stability guards
+│   ├── dvr_engine/    # DaVinci Resolve API client connector, project manager, and render pipeline
+│   └── cli.py         # Command-line interface for manual/batch transcoding and system health checks
 ├── tests/             # Pytest test suites and mock unit tests for configuration parsing, watcher logic, and render engine
+│   ├── test_config_and_watcher.py
+│   └── test_dvr_mock.py
 ├── versions/          # Version-specific snapshots and standalone modular packages:
 │   ├── v1-davinci-dependent/  # Version 1 CLI/Daemon headless engine with post-mortem & developer guides
 │   └── v2-gui/                # Version 2 Native macOS SwiftUI application source & SwiftPM package
-└── watch_folders/     # Hot-folder lifecycle staging directories for automated drop-in video transcoding
+├── watch_folders/     # Hot-folder lifecycle staging directories for automated drop-in video transcoding
+│   ├── 00_IN_INGEST/          # Drop zone for new incoming camera media
+│   ├── 01_PROCESSING/         # Active transcoding queue
+│   ├── 02_COMPLETED_MP4/      # Finished 10-bit H.265 transcode outputs
+│   ├── 03_ARCHIVE_BRAW/       # Archive location for processed source RAW files
+│   └── 99_FAILED/             # Error quarantine folder
+├── .gitignore         # Exclusions for OS artifacts, builds, logs, and media binaries
+└── README.md          # Project overview, folder guide, and quick start documentation
 ```
 
 ### Detailed Folder Breakdown
 
-* **[`BRAW SDK/`](file:///Users/studio/Documents/Sandbox/davinci-braw/BRAW%20SDK)**: Contains Blackmagic Design's official Blackmagic RAW SDK (v4.x) frameworks, C++/Metal sample implementations, header definitions, and cross-platform native binaries (macOS, Windows, Linux, iPadOS).
-* **[`Documents/`](file:///Users/studio/Documents/Sandbox/davinci-braw/Documents)**: Technical references including Blackmagic Generation 5 Color Science whitepapers, SDK documentation, and DaVinci Resolve headless API notes.
-* **[`changelog/`](file:///Users/studio/Documents/Sandbox/davinci-braw/changelog)**: Detailed engineering specifications, concurrency models, state machine flowcharts, and version-by-version architectural logs.
-* **[`config/`](file:///Users/studio/Documents/Sandbox/davinci-braw/config)**: Config templates (`config.default.yaml`) and active runtime configurations (`config.yaml`) defining export codecs (H.265/HEVC Main10), render quality, LUT paths, and watch folder timing thresholds.
-* **[`logs/`](file:///Users/studio/Documents/Sandbox/davinci-braw/logs)**: Standardized rotation and execution log files for watcher processes, project setup, resolve client connections, and render progress.
-* **[`scripts/`](file:///Users/studio/Documents/Sandbox/davinci-braw/scripts)**: Helper launch scripts:
-  * `run_headless_dvr.sh`: Launches DaVinci Resolve in background headless mode (`-nogui`).
-  * `start_watcher.sh`: Launches the automated folder monitor daemon.
-  * `start_gui.sh`: Builds and launches the native SwiftUI macOS workstation application.
-* **[`src/`](file:///Users/studio/Documents/Sandbox/davinci-braw/src)**: Python core engine:
-  * `common/`: Configuration validation, rotating logger, and file watcher with stability-guard checking.
-  * `dvr_engine/`: Resolve Studio client connector, automated project manager, timeline builder, 3D LUT applier, and render job monitoring.
-  * `cli.py`: Command-line interface for manual single/batch transcodes, healthchecks, and LUT discovery.
-* **[`tests/`](file:///Users/studio/Documents/Sandbox/davinci-braw/tests)**: Comprehensive test suite validating config schemas, watcher debounce/locking logic, and mock DaVinci Resolve API interactions without requiring hardware Resolve instances.
-* **[`versions/`](file:///Users/studio/Documents/Sandbox/davinci-braw/versions)**:
-  * `v1-davinci-dependent/`: Standalone package of the initial CLI/Watcher engine along with post-mortem analysis and troubleshooting guides.
-  * `v2-gui/`: Native macOS SwiftUI workstation app built with Swift Package Manager, featuring real-time folder telemetry, interactive log views, custom transcode configurations, and process runner management.
-* **[`watch_folders/`](file:///Users/studio/Documents/Sandbox/davinci-braw/watch_folders)**: Structured workflow directories that drive the automated ingest pipeline:
-  * `00_IN_INGEST/`: Drop-in target for newly transferred `.braw` camera files.
-  * `01_PROCESSING/`: Staging directory for clips actively rendering.
-  * `02_COMPLETED_MP4/`: Destination directory for finished 10-bit H.265 MP4 files.
-  * `03_ARCHIVE_BRAW/`: Safe archive for original `.braw` source files after successful export.
-  * `99_FAILED/`: Isolation folder for corrupt, unstable, or failed clips.
+* **[`Documents/`](file:///Users/studio/Documents/Sandbox/davinci-braw/Documents)**: Repository documentation and vendor references:
+  * **`Blackmagic RAW SDK/`**: Official Blackmagic Design SDK frameworks (v4.x), Metal/C++ decoder libraries, sample projects, and header definitions across macOS, Windows, Linux, and iPadOS.
+  * **`Blackmagic Generation 5 Color Science Technical Reference.pdf`**: Deep-dive technical whitepaper on Blackmagic Gen 5 color science curves and transforms.
+  * **`BlackmagicRAW-SDK.pdf`**: Official SDK programming guide and API documentation.
+  * **`headless-api.md`**: Guide for invoking DaVinci Resolve Studio in headless background mode (`-nogui`) and interacting via Python scripting APIs.
+* **[`changelog/`](file:///Users/studio/Documents/Sandbox/davinci-braw/changelog)**: Engineering records, concurrency patterns, UI/UX architecture notes, and deep-dive technical changelogs (including [`V2_GUI_CHANGELOG.md`](file:///Users/studio/Documents/Sandbox/davinci-braw/changelog/V2_GUI_CHANGELOG.md)).
+* **[`config/`](file:///Users/studio/Documents/Sandbox/davinci-braw/config)**: Configuration files for the transcoding system:
+  * `config.default.yaml`: Base template and fallback settings.
+  * `config.yaml`: Active runtime configuration setting export codecs (H.265 Main10), render quality, LUT presets, audio parameters, and file stability timers.
+* **[`logs/`](file:///Users/studio/Documents/Sandbox/davinci-braw/logs)**: Automated runtime log rotation directory capturing trace messages from watcher daemons, DaVinci Resolve API calls, project management, and render status.
+* **[`scripts/`](file:///Users/studio/Documents/Sandbox/davinci-braw/scripts)**: Executable shell entry points:
+  * `run_headless_dvr.sh`: Launches DaVinci Resolve Studio with `-nogui` background execution.
+  * `start_watcher.sh`: Starts the automated background hot-folder monitoring daemon.
+  * `start_gui.sh`: Compiles and launches the Version 2 native macOS SwiftUI desktop app.
+* **[`src/`](file:///Users/studio/Documents/Sandbox/davinci-braw/src)**: Primary Python automation and integration codebase:
+  * `common/`: Config parsing/validation (`config.py`), logging setup (`logger.py`), and directory watcher with multi-step file stability checks (`watcher.py`).
+  * `dvr_engine/`: Resolve client socket connection (`resolve_client.py`), timeline/project creation (`project_manager.py`), node LUT application, and render job queue management (`render_pipeline.py`).
+  * `cli.py`: Unified CLI interface for running batch transcodes, watching directories, checking Resolve connectivity, and querying available LUTs.
+* **[`tests/`](file:///Users/studio/Documents/Sandbox/davinci-braw/tests)**: Pytest suite verifying watcher debounce timers, POSIX file locking, configuration loading, and mocked DaVinci Resolve API pipelines.
+* **[`versions/`](file:///Users/studio/Documents/Sandbox/davinci-braw/versions)**: Version packages:
+  * `v1-davinci-dependent/`: Complete archive and post-mortem guide of the Version 1 CLI/Daemon workflow.
+  * `v2-gui/`: Native macOS SwiftUI application built with Swift Package Manager (Swift 6), featuring real-time folder telemetry, live log stream, transcode queue controls, and customizable export settings.
+* **[`watch_folders/`](file:///Users/studio/Documents/Sandbox/davinci-braw/watch_folders)**: Multi-stage hot-folder pipeline:
+  * `00_IN_INGEST/`: Ingest drop directory for newly imported `.braw` camera clips.
+  * `01_PROCESSING/`: Lock-stage directory where files are moved during active transcode.
+  * `02_COMPLETED_MP4/`: Target output folder for finished 10-bit H.265 MP4 exports.
+  * `03_ARCHIVE_BRAW/`: Storage location for original RAW files following successful export.
+  * `99_FAILED/`: Quarantine directory for corrupt or aborted transcode attempts.
 
 ---
 
