@@ -6,7 +6,6 @@ export default defineConfig({
     rollupOptions: {
       external: [
         'electron',
-        'electron-squirrel-startup',
         'child_process',
         'fs',
         'fs/promises',

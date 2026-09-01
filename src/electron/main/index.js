@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const yaml = require('js-yaml');
 const os = require('os');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -124,42 +125,23 @@ function resolvePythonBinary() {
 }
 
 function resolveProjectRootDir() {
-  let cur = app.getAppPath();
-  if (fs.existsSync(path.join(cur, 'src', 'cli.py'))) {
-    return cur;
-  }
-  if (fs.existsSync(path.join(process.cwd(), 'src', 'cli.py'))) {
-    return process.cwd();
-  }
-  // Try parent directories
-  let parent = path.dirname(cur);
-  if (fs.existsSync(path.join(parent, 'src', 'cli.py'))) {
-    return parent;
+  const candidates = [
+    process.resourcesPath,
+    path.join(process.resourcesPath, 'app.asar.unpacked'),
+    app.getAppPath(),
+    path.dirname(app.getAppPath()),
+    process.cwd(),
+  ];
+  for (const c of candidates) {
+    if (c && fs.existsSync(path.join(c, 'src', 'cli.py'))) {
+      return c;
+    }
   }
   return process.cwd();
 }
 
-function dumpSimpleYaml(obj, indent = 0) {
-  let lines = [];
-  const pad = ' '.repeat(indent);
-  for (const [key, value] of Object.entries(obj)) {
-    if (value === null || value === undefined) {
-      lines.push(`${pad}${key}: null`);
-    } else if (typeof value === 'object' && !Array.isArray(value)) {
-      lines.push(`${pad}${key}:`);
-      lines.push(dumpSimpleYaml(value, indent + 2));
-    } else if (Array.isArray(value)) {
-      lines.push(`${pad}${key}: [${value.map(v => JSON.stringify(v)).join(', ')}]`);
-    } else if (typeof value === 'string') {
-      lines.push(`${pad}${key}: "${value.replace(/"/g, '\\"')}"`);
-    } else {
-      lines.push(`${pad}${key}: ${value}`);
-    }
-  }
-  return lines.join('\n');
-}
-
 function generateRuntimeYaml(rootFolder, config) {
+  const projectRoot = resolveProjectRootDir();
   const configObj = {
     storage: {
       ingest_dir: path.join(rootFolder, '00_IN_INGEST'),
@@ -196,14 +178,14 @@ function generateRuntimeYaml(rootFolder, config) {
       }
     },
     engine: {
-      type: 'ffmpeg',
+      type: 'native',
       ffmpeg_path: 'ffmpeg',
-      decoder_path: 'bin/braw_decode',
+      decoder_path: path.join(projectRoot, 'bin', 'braw_decode'),
       hardware_acceleration: true
     }
   };
 
-  const yamlStr = dumpSimpleYaml(configObj);
+  const yamlStr = yaml.dump(configObj);
   const tempPath = path.join(os.tmpdir(), 'braw_electron_config.yaml');
   fs.writeFileSync(tempPath, yamlStr, 'utf8');
   return tempPath;
@@ -313,7 +295,7 @@ ipcMain.handle('dialog:selectDirectory', async () => {
 });
 
 ipcMain.handle('dialog:revealInFinder', async (_event, subfolderName) => {
-  const target = subfolderName 
+  const target = subfolderName
     ? path.join(activeRootFolder, subfolderName)
     : activeRootFolder;
 

@@ -9,6 +9,12 @@ module.exports = {
     appCategoryType: 'public.app-category.video',
     icon: './assets/icons/icon',
     asar: true,
+    extraResource: [
+      './bin',
+      './assets',
+      './src',
+      './config'
+    ],
     osxSign: process.env.APPLE_ID || process.env.APPLE_SIGN_IDENTITY
       ? {
           identity: process.env.APPLE_SIGN_IDENTITY,
