@@ -62,6 +62,16 @@ def cmd_watch(args):
     logger.info(f"LUT: {config.transcode.color.lut_path}")
     logger.info(f"Codec: {config.transcode.codec} (Profile: {config.transcode.encoding_profile})")
 
+    # Initialize health server if available
+    health_port = getattr(args, "health_port", 8765)
+    try:
+        from debug_tools.core.health_server import start_health_server
+        health_srv = start_health_server(port=health_port)
+        logger.info(f"Embedded Health API running on http://127.0.0.1:{health_port}")
+    except Exception as e:
+        logger.debug(f"Health server not started: {e}")
+        health_srv = None
+
     # Initialize shared pipeline instance
     pipeline = FFmpegPipeline(config=config.transcode, ffmpeg_path=config.engine.ffmpeg_path)
 
@@ -76,8 +86,10 @@ def cmd_watch(args):
     watcher.start()
 
     # Graceful shutdown handler
-    def handle_sigint(signum, frame):
+    def handle_sigint(signum=None, frame=None):
         logger.info("Shutdown signal received. Stopping watcher and cancelling active pipelines...")
+        if health_srv:
+            health_srv.stop()
         watcher.stop()
         pipeline.cancel_active_jobs()
         sys.exit(0)
@@ -178,6 +190,7 @@ def cmd_test_env(args):
 def main():
     config_parser = argparse.ArgumentParser(add_help=False)
     config_parser.add_argument("-c", "--config", type=str, default=None, help="Path to config.yaml")
+    config_parser.add_argument("--health-port", type=int, default=8765, help="Port for embedded Health API (default: 8765)")
 
     parser = argparse.ArgumentParser(
         description="BRAW to H.265 MP4 Automated Video Converter (v3.1 Standalone)",

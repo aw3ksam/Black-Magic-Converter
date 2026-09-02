@@ -1,0 +1,49 @@
+# Complete Configuration for Black Magic Converter Endurance Testing Toolkit
+# Complies with Section 4.7 of the Reliability & Observability Specification.
+
+endurance_test:
+  test_duration_minutes: 60
+  video_order: "seeded_random"  # sequential | alphabetical | random | seeded_random | loop
+  random_seed: 42
+  max_retries_per_job: 1
+
+directories:
+  test_video_source_dir: "./samples"
+  watch_dir: "./watch_folders/00_IN_INGEST"
+  output_dir: "./watch_folders/02_COMPLETED_MP4"
+  archive_dir: "./watch_folders/03_ARCHIVE_BRAW"
+  failure_artifacts_dir: "./failures"
+  logs_dir: "./logs"
+  reports_dir: "./reports"
+  db_path: "./database/test_runs.db"
+
+timeouts:
+  startup_timeout_sec: 30
+  max_job_timeout_sec: 600
+  hang_timeout_sec: 45
+  shutdown_timeout_sec: 20
+  heartbeat_interval_sec: 5
+  telemetry_sample_interval_sec: 2
+
+tolerances:
+  duration_diff_tolerance_sec: 0.5
+  fps_tolerance_percent: 1.0
+  min_acceptable_fps: 15.0
+  allow_missing_audio: false
+  run_full_decode_validation: true
+
+thresholds:
+  disk_free_space_threshold_mb: 2048
+  max_consecutive_restarts: 5
+  restart_backoff_base_sec: 2
+
+application:
+  command: ["python3", "-u", "-m", "src.cli", "--config", "config/config.yaml", "watch"]
+  health_endpoint: "http://127.0.0.1:8765"
+  working_dir: "."
+
+fault_injection:
+  enabled: false
+  probability_app_kill: 0.0
+  probability_corrupt_input: 0.0
+  probability_artificial_delay: 0.0

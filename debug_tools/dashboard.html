@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Black Magic Converter — Debug, Telemetry & Chaos Dashboard</title>
+<style>
+  :root {
+    --bg-base: #090d16;
+    --bg-surface: #111827;
+    --bg-surface-elevated: #1e293b;
+    --bg-surface-hover: #273549;
+    --border-subtle: #243044;
+    --border-highlight: #3b82f6;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-subtle: #64748b;
+    --accent-blue: #38bdf8;
+    --accent-indigo: #6366f1;
+    --accent-purple: #a855f7;
+    --accent-emerald: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-rose: #f43f5e;
+    --accent-cyan: #06b6d4;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: var(--bg-base);
+    color: var(--text-main);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding-bottom: 60px;
+    overflow-x: hidden;
+  }
+
+  /* Header Bar */
+  header {
+    background: rgba(17, 24, 39, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 14px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 16px;
+    color: white;
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+  }
+  .brand-title { font-size: 16px; font-weight: 700; color: var(--text-main); letter-spacing: -0.02em; }
+  .brand-subtitle { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .header-actions { display: flex; align-items: center; gap: 12px; }
+  .connection-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-emerald);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+  .connection-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-emerald);
+    box-shadow: 0 0 8px var(--accent-emerald);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+
+  /* Nav Tabs */
+  .tab-nav {
+    display: flex;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0 24px;
+    gap: 4px;
+    overflow-x: auto;
+  }
+  .tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.02); }
+  .tab-btn.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  /* Main Container */
+  main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; animation: fadeIn 0.2s ease-in; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Grid & Cards */
+  .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; margin-bottom: 20px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 20px; }
+
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding-bottom: 10px;
+  }
+  .card-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+  .card-stat-val { font-size: 28px; font-weight: 800; font-family: var(--font-mono); margin: 6px 0 2px 0; }
+  .card-stat-desc { font-size: 12px; color: var(--text-subtle); }
+
+  /* Buttons & Inputs */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+  }
+  .btn-primary { background: linear-gradient(135deg, #0284c7, #2563eb); color: white; }
+  .btn-primary:hover { background: linear-gradient(135deg, #0369a1, #1d4ed8); box-shadow: 0 0 12px rgba(37, 99, 235, 0.4); }
+  .btn-danger { background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.4); }
+  .btn-danger:hover { background: var(--accent-rose); color: white; }
+  .btn-warning { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border-color: rgba(245, 158, 11, 0.4); }
+  .btn-warning:hover { background: var(--accent-amber); color: black; }
+  .btn-secondary { background: var(--bg-surface-elevated); color: var(--text-main); border-color: var(--border-subtle); }
+  .btn-secondary:hover { background: var(--bg-surface-hover); border-color: var(--text-muted); }
+
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+  .form-control {
+    width: 100%;
+    background: var(--bg-base);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text-main);
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.15s;
+  }
+  .form-control:focus { outline: none; border-color: var(--accent-blue); box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); }
+  .form-range { width: 100%; accent-color: var(--accent-blue); margin: 6px 0; }
+  .range-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-subtle); font-family: var(--font-mono); }
+
+  /* Switch */
+  .switch-container { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .switch-label { font-size: 13px; font-weight: 500; color: var(--text-main); }
+  .switch-sub { font-size: 11px; color: var(--text-subtle); display: block; }
+  .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--border-subtle);
+    transition: .3s;
+    border-radius: 24px;
+  }
+  .slider:before {
+    position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+  }
+  input:checked + .slider { background-color: var(--accent-emerald); }
+  input:checked + .slider:before { transform: translateX(20px); }
+
+  /* Progress Bar */
+  .progress-bar-bg { width: 100%; height: 10px; background: var(--bg-base); border-radius: 6px; overflow: hidden; margin: 12px 0; border: 1px solid var(--border-subtle); }
+  .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue)); width: 0%; transition: width 0.3s ease; }
+
+  /* State Machine Visualizer */
+  .sm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .sm-node {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+  }
+  .sm-node.active {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
+    transform: scale(1.04);
+  }
+  .sm-node.terminal-ok { border-color: rgba(16, 185, 129, 0.4); color: var(--accent-emerald); }
+  .sm-node.terminal-fail { border-color: rgba(244, 63, 94, 0.4); color: var(--accent-rose); }
+
+  /* Live Terminal Logs */
+  .log-terminal {
+    background: #050811;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: #cbd5e1;
+    height: 420px;
+    overflow-y: auto;
+    padding: 14px;
+    line-height: 1.6;
+  }
+  .log-line { margin-bottom: 3px; word-break: break-all; white-space: pre-wrap; }
+  .log-line.INFO { color: #38bdf8; }
+  .log-line.WARNING { color: #facc15; }
+  .log-line.ERROR { color: #f87171; font-weight: 600; }
+  .log-line.DEBUG { color: #64748b; }
+
+  /* Table styling */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+  th { background: rgba(0,0,0,0.3); color: var(--text-muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); }
+  td { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  tr:hover { background: rgba(255,255,255,0.02); }
+  .badge { padding: 3px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; font-family: var(--font-mono); }
+  .badge-success { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+  .badge-failed { background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.3); }
+  .badge-transcoding { background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
+
+  /* Charts */
+  canvas.telemetry-chart { width: 100%; height: 160px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-logo">BM</div>
+    <div>
+      <div class="brand-title">Black Magic Converter</div>
+      <div class="brand-subtitle">Debug, Observability & Chaos Control Hub</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span class="connection-badge" id="connBadge">
+      <span class="connection-dot"></span>
+      <span id="connText">Connected (:8765)</span>
+    </span>
+    <button class="btn btn-secondary" onclick="probeHealth()">🔄 Refresh</button>
+    <button class="btn btn-primary" onclick="copyLaunchCli()">📋 Copy CLI</button>
+  </div>
+</header>
+
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('tab-live')">📊 Live Telemetry & Health</button>
+  <button class="tab-btn" onclick="switchTab('tab-config')">⚙️ Endurance Test Config</button>
+  <button class="tab-btn" onclick="switchTab('tab-chaos')">⚡ Chaos & Fault Injection</button>
+  <button class="tab-btn" onclick="switchTab('tab-tolerances')">🔍 Tolerances & Quality</button>
+  <button class="tab-btn" onclick="switchTab('tab-logs')">🪵 Multi-Stream Logs</button>
+  <button class="tab-btn" onclick="switchTab('tab-runs')">🗄️ Database & Runs</button>
+</nav>
+
+<main>
+
+  <!-- TAB 1: LIVE TELEMETRY & HEALTH -->
+  <section id="tab-live" class="tab-content active">
+    <div class="grid-4">
+      <div class="card">
+        <div class="card-title">Engine State</div>
+        <div class="card-stat-val" id="appStateVal" style="color: var(--accent-blue);">IDLE</div>
+        <div class="card-stat-desc" id="appUptime">Uptime: 0.0s | PID: --</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Active Transcode Speed</div>
+        <div class="card-stat-val" id="fpsVal" style="color: var(--accent-purple);">0.0 <span style="font-size:16px;">FPS</span></div>
+        <div class="card-stat-desc" id="rtfVal">Realtime Factor: 0.0x</div>
+      </div>
+      <div class="card">
+        <div class="card-title">App Memory (RSS)</div>
+        <div class="card-stat-val" id="ramVal" style="color: var(--accent-emerald);">-- <span style="font-size:16px;">MB</span></div>
+        <div class="card-stat-desc" id="threadsVal">Threads: -- | Open FDs: --</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Disk Free Space</div>
+        <div class="card-stat-val" id="diskFreeVal" style="color: var(--accent-cyan);">-- <span style="font-size:16px;">GB</span></div>
+        <div class="card-stat-desc" id="diskIoVal">Read: 0.0 MB/s | Write: 0.0 MB/s</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Active Job Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Active Job & Stream Progress</div>
+          <span class="badge badge-transcoding" id="jobBadge">NO ACTIVE JOB</span>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); margin-bottom: 6px;">
+          Job ID: <strong id="jobIdVal" style="color: var(--text-main);">None</strong>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-subtle); margin-bottom: 12px;">
+          File: <span id="inputFileVal">None</span>
+        </div>
+
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="jobProgressBar"></div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted);">
+          <span>Frames: <strong id="framesVal">0 / 0</strong> (<span id="pctVal">0%</span>)</span>
+          <span>Elapsed: <strong id="elapsedVal">0.0s</strong> | ETA: <strong id="etaVal">0.0s</strong></span>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 18px;">
+          <button class="btn btn-secondary" style="flex: 1;" onclick="probeEndpoint('/ready')">Check /ready</button>
+          <button class="btn btn-secondary" style="flex: 1;" onclick="probeEndpoint('/status')">Poll /status</button>
+          <button class="btn btn-danger" style="flex: 1;" onclick="triggerShutdown()">Shutdown App</button>
+        </div>
+      </div>
+
+      <!-- Real-Time Sparkline Chart -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Telemetry Utilization Curves</div>
+          <div style="font-size: 12px; color: var(--text-subtle);">Live Window (60s)</div>
+        </div>
+        <canvas id="telemetryCanvas" class="telemetry-chart" height="150"></canvas>
+        <div style="display: flex; gap: 16px; margin-top: 12px; font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">
+          <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 3px; background: #38bdf8; display: inline-block;"></span> CPU %</div>
+          <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 3px; background: #a855f7; display: inline-block;"></span> RAM RSS MB</div>
+          <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 3px; background: #10b981; display: inline-block;"></span> FPS</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- State Machine Visualizer -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Job State Machine Topology (13 Valid States)</div>
+        <span style="font-size: 12px; color: var(--text-subtle);">Enforced by debug_tools/core/state_machine.py</span>
+      </div>
+      <div class="sm-grid">
+        <div class="sm-node" id="sm-DISCOVERED">1. DISCOVERED</div>
+        <div class="sm-node" id="sm-PREPARING">2. PREPARING</div>
+        <div class="sm-node" id="sm-SOURCE_ANALYZED">3. SOURCE_ANALYZED</div>
+        <div class="sm-node" id="sm-COPYING_TO_WATCH">4. COPYING_TO_WATCH</div>
+        <div class="sm-node" id="sm-SUBMITTED">5. SUBMITTED</div>
+        <div class="sm-node" id="sm-DETECTED">6. DETECTED</div>
+        <div class="sm-node" id="sm-TRANSCODING">7. TRANSCODING</div>
+        <div class="sm-node" id="sm-OUTPUT_DETECTED">8. OUTPUT_DETECTED</div>
+        <div class="sm-node" id="sm-VALIDATING">9. VALIDATING</div>
+        <div class="sm-node terminal-ok" id="sm-COMPLETED">10. COMPLETED</div>
+        <div class="sm-node terminal-fail" id="sm-FAILED">11. FAILED</div>
+        <div class="sm-node" id="sm-RECOVERING">12. RECOVERING</div>
+        <div class="sm-node" id="sm-INTERRUPTED">13. INTERRUPTED</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2: ENDURANCE TEST CONFIGURATOR -->
+  <section id="tab-config" class="tab-content">
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Execution & Video Sequencing Parameters</div>
+          <span class="badge badge-success">endurance_config.yaml</span>
+        </div>
+
+        <div class="form-group">
+          <label>Target Test Duration (Minutes)</label>
+          <input type="range" class="form-range" id="cfgDuration" min="1" max="1440" value="60" oninput="updateConfigPreview()">
+          <div class="range-meta"><span>1m</span><span id="cfgDurationVal">60 minutes</span><span>24h (1440m)</span></div>
+        </div>
+
+        <div class="form-group">
+          <label>Video Sequencing Order Mode</label>
+          <select class="form-control" id="cfgOrder" onchange="updateConfigPreview()">
+            <option value="seeded_random" selected>seeded_random (Deterministic Pseudo-Random)</option>
+            <option value="sequential">sequential (Natural Directory Order)</option>
+            <option value="alphabetical">alphabetical (Filename A-Z)</option>
+            <option value="random">random (Unseeded System Entropy)</option>
+            <option value="loop">loop (Infinite Cyclic Playlist)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Random Seed (for seeded_random)</label>
+          <input type="number" class="form-control" id="cfgSeed" value="42" oninput="updateConfigPreview()">
+        </div>
+
+        <div class="form-group">
+          <label>Max Automatic Retries per Failed Job</label>
+          <input type="number" class="form-control" id="cfgRetries" value="1" min="0" max="5" oninput="updateConfigPreview()">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Watchdog Supervision & Timeouts</div>
+        </div>
+
+        <div class="form-group">
+          <label>Startup & Pickup Timeout (Seconds)</label>
+          <input type="number" class="form-control" id="cfgStartupTimeout" value="30" oninput="updateConfigPreview()">
+        </div>
+
+        <div class="form-group">
+          <label>Max Single Job Timeout (Seconds)</label>
+          <input type="number" class="form-control" id="cfgMaxJobTimeout" value="600" oninput="updateConfigPreview()">
+        </div>
+
+        <div class="form-group">
+          <label>Process Hang / Liveness Timeout (Seconds)</label>
+          <input type="number" class="form-control" id="cfgHangTimeout" value="45" oninput="updateConfigPreview()">
+        </div>
+
+        <div class="form-group">
+          <label>Max Consecutive Restarts (Crash Loop Breaker)</label>
+          <input type="number" class="form-control" id="cfgMaxRestarts" value="5" oninput="updateConfigPreview()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Generated CLI Preview -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">CLI Invocation Generator</div>
+        <button class="btn btn-primary" onclick="copyLaunchCli()">Copy Command</button>
+      </div>
+      <div style="background: var(--bg-base); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle); font-family: var(--font-mono); font-size: 13px; color: var(--accent-cyan);" id="cliPreview">
+        python3 debug_tools/run_endurance.py --config debug_tools/config/endurance_config.yaml --duration 60 --order seeded_random --seed 42
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 3: CHAOS & FAULT INJECTION -->
+  <section id="tab-chaos" class="tab-content">
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Chaos Simulation Engine</div>
+          <span class="badge badge-failed" id="chaosBadge">DISABLED</span>
+        </div>
+
+        <div class="switch-container">
+          <div>
+            <span class="switch-label">Enable Fault Injection Master Switch</span>
+            <span class="switch-sub">Injects synthetic crashes, corruption, and delays into running test pipeline</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="chaosEnable" onchange="toggleChaos()">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label>Probability of Hard Subprocess Kill (SIGKILL per job)</label>
+          <input type="range" class="form-range" id="chaosKillProb" min="0" max="1" step="0.05" value="0.0" oninput="updateChaosLabels()">
+          <div class="range-meta"><span>0%</span><span id="chaosKillProbVal">0%</span><span>100%</span></div>
+        </div>
+
+        <div class="form-group">
+          <label>Probability of Input Byte Stream Corruption</label>
+          <input type="range" class="form-range" id="chaosCorruptProb" min="0" max="1" step="0.05" value="0.0" oninput="updateChaosLabels()">
+          <div class="range-meta"><span>0%</span><span id="chaosCorruptProbVal">0%</span><span>100%</span></div>
+        </div>
+
+        <div class="form-group">
+          <label>Probability of Artificial Pipeline Latency / Delay</label>
+          <input type="range" class="form-range" id="chaosDelayProb" min="0" max="1" step="0.05" value="0.0" oninput="updateChaosLabels()">
+          <div class="range-meta"><span>0%</span><span id="chaosDelayProbVal">0%</span><span>100%</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Manual Chaos Trigger Pad</div>
+          <span style="font-size: 12px; color: var(--text-subtle);">Direct Simulation Probes</span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          Trigger real-time edge-case fault conditions to test watchdog auto-recovery, signal handlers, and forensic artifact packaging:
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <button class="btn btn-danger" onclick="injectSigkill()">💥 Send SIGKILL to Application Process</button>
+          <button class="btn btn-warning" onclick="simulateHang()">⏳ Inject 10s Artificial Transcode Hang</button>
+          <button class="btn btn-secondary" onclick="simulateCorruptMedia()">🔨 Inject Corrupt Byte Pattern into Staging Area</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 4: TOLERANCES & QUALITY -->
+  <section id="tab-tolerances" class="tab-content">
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Bitstream Tolerances & Validation Rules</div>
+        </div>
+
+        <div class="form-group">
+          <label>Max Duration Difference Tolerance (Seconds)</label>
+          <input type="number" class="form-control" id="tolDuration" value="0.5" step="0.1">
+          <span class="card-stat-desc">Fails validation if output media duration deviates from source BRAW by > tolerance</span>
+        </div>
+
+        <div class="form-group">
+          <label>Max Framerate Delta Tolerance (%)</label>
+          <input type="number" class="form-control" id="tolFps" value="1.0" step="0.1">
+          <span class="card-stat-desc">Enforces frame rate preservation (e.g. 23.976 -> 23.976)</span>
+        </div>
+
+        <div class="form-group">
+          <label>Minimum Acceptable Transcode Speed (FPS)</label>
+          <input type="number" class="form-control" id="tolMinFps" value="15.0" step="1.0">
+          <span class="card-stat-desc">Logs PERFORMANCE_DEGRADATION warnings if speed drops below threshold</span>
+        </div>
+
+        <div class="switch-container">
+          <div>
+            <span class="switch-label">Run Full Bitstream Decode Pass (-f null)</span>
+            <span class="switch-sub">Decodes every single video & audio frame to verify zero undecodable packets</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="tolDecode" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="switch-container">
+          <div>
+            <span class="switch-label">Allow Missing Audio Stream</span>
+            <span class="switch-sub">Permits silent video transcoding if source clip contains no audio tracks</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="tolAudio">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">18 Standardized Failure Categories</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">
+          <div>1. APP_CRASH</div>
+          <div>10. OUTPUT_CORRUPT</div>
+          <div>2. HARNESS_CRASH</div>
+          <div>11. OUTPUT_VALIDATION_FAILURE</div>
+          <div>3. TRANSCODER_CRASH</div>
+          <div>12. FFMPEG_FAILURE</div>
+          <div>4. WATCHDOG_FAILURE</div>
+          <div>13. FFPROBE_FAILURE</div>
+          <div>5. INPUT_COPY_FAILURE</div>
+          <div>14. DISK_FULL</div>
+          <div>6. INPUT_NOT_DETECTED</div>
+          <div>15. OUT_OF_MEMORY</div>
+          <div>7. TRANSCODE_TIMEOUT</div>
+          <div>16. GPU_FAILURE</div>
+          <div>8. APPLICATION_HANG</div>
+          <div>17. PERFORMANCE_DEGRADATION</div>
+          <div>9. OUTPUT_NOT_CREATED</div>
+          <div>18. UNKNOWN_FAILURE</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 5: MULTI-STREAM LOGS -->
+  <section id="tab-logs" class="tab-content">
+    <div class="card">
+      <div class="card-header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="card-title">Live Multi-Stream Log Console</div>
+          <select class="form-control" style="width: auto;" id="logStreamSelect" onchange="fetchLogs()">
+            <option value="harness">harness.log</option>
+            <option value="application">application.log</option>
+            <option value="errors">errors.log</option>
+            <option value="transcodes">transcodes.log</option>
+            <option value="performance">performance.log</option>
+            <option value="watchdog">watchdog.log</option>
+            <option value="results">results.jsonl</option>
+          </select>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" class="form-control" style="width: 200px;" id="logSearch" placeholder="Filter logs..." onkeyup="filterLogs()">
+          <button class="btn btn-secondary" onclick="clearLogs()">Clear</button>
+        </div>
+      </div>
+      <div class="log-terminal" id="logTerminal">
+        <div class="log-line INFO">[INFO] [dashboard] Live log stream initialized. Polling logs directory...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 6: DATABASE & RUNS -->
+  <section id="tab-runs" class="tab-content">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Historical Endurance Test Runs & Jobs</div>
+        <button class="btn btn-secondary" onclick="fetchRecentJobs()">🔄 Reload DB</button>
+      </div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Source Clip</th>
+              <th>Wall Time</th>
+              <th>Speed</th>
+              <th>RTF</th>
+              <th>Status</th>
+              <th>Failure Category</th>
+            </tr>
+          </thead>
+          <tbody id="jobsTableBody">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--text-subtle); padding: 24px;">No test run records loaded. Start an endurance test to populate results.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+let currentTab = 'tab-live';
+let telemetryHistory = { cpu: [], ram: [], fps: [] };
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+  currentTab = tabId;
+}
+
+function updateConfigPreview() {
+  const dur = document.getElementById('cfgDuration').value;
+  const order = document.getElementById('cfgOrder').value;
+  const seed = document.getElementById('cfgSeed').value;
+  document.getElementById('cfgDurationVal').textContent = `${dur} minutes`;
+
+  const cli = `python3 debug_tools/run_endurance.py --config debug_tools/config/endurance_config.yaml --duration ${dur} --order ${order} --seed ${seed}`;
+  document.getElementById('cliPreview').textContent = cli;
+}
+
+function copyLaunchCli() {
+  const cli = document.getElementById('cliPreview').textContent.trim();
+  navigator.clipboard.writeText(cli).then(() => {
+    alert("Copied to clipboard:\n" + cli);
+  });
+}
+
+function toggleChaos() {
+  const enabled = document.getElementById('chaosEnable').checked;
+  const badge = document.getElementById('chaosBadge');
+  if (enabled) {
+    badge.textContent = "ENABLED";
+    badge.className = "badge badge-success";
+  } else {
+    badge.textContent = "DISABLED";
+    badge.className = "badge badge-failed";
+  }
+}
+
+function updateChaosLabels() {
+  document.getElementById('chaosKillProbVal').textContent = Math.round(document.getElementById('chaosKillProb').value * 100) + '%';
+  document.getElementById('chaosCorruptProbVal').textContent = Math.round(document.getElementById('chaosCorruptProb').value * 100) + '%';
+  document.getElementById('chaosDelayProbVal').textContent = Math.round(document.getElementById('chaosDelayProb').value * 100) + '%';
+}
+
+function injectSigkill() {
+  if (confirm("Simulate hard crash by sending SIGKILL to application subprocess?")) {
+    fetch('/api/chaos/kill', { method: 'POST' }).catch(() => {});
+    logMessage("WARNING", "[CHAOS] Triggered synthetic SIGKILL on application process.");
+  }
+}
+
+function simulateHang() {
+  fetch('/api/chaos/delay', { method: 'POST' }).catch(() => {});
+  logMessage("WARNING", "[CHAOS] Injected 10-second artificial pipeline delay.");
+}
+
+function simulateCorruptMedia() {
+  fetch('/api/chaos/corrupt', { method: 'POST' }).catch(() => {});
+  logMessage("WARNING", "[CHAOS] Injected synthetic corrupted media byte sequence.");
+}
+
+function clearLogs() {
+  document.getElementById('logTerminal').innerHTML = '';
+}
+
+function logMessage(level, text) {
+  const term = document.getElementById('logTerminal');
+  const div = document.createElement('div');
+  div.className = `log-line ${level}`;
+  div.textContent = `${new Date().toISOString().substring(11, 19)} [${level}] ${text}`;
+  term.appendChild(div);
+  term.scrollTop = term.scrollHeight;
+}
+
+function updateStateMachine(activeState) {
+  document.querySelectorAll('.sm-node').forEach(n => n.classList.remove('active'));
+  const node = document.getElementById(`sm-${activeState}`);
+  if (node) {
+    node.classList.add('active');
+  }
+}
+
+// Live Health & Status Poller
+async function probeHealth() {
+  try {
+    const res = await fetch('http://127.0.0.1:8765/status', { mode: 'cors' });
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('appStateVal').textContent = data.state || 'IDLE';
+      updateStateMachine(data.state || 'DISCOVERED');
+
+      if (data.state === 'TRANSCODING') {
+        document.getElementById('jobBadge').textContent = 'TRANSCODING';
+        document.getElementById('jobBadge').className = 'badge badge-transcoding';
+      } else {
+        document.getElementById('jobBadge').textContent = data.state || 'IDLE';
+        document.getElementById('jobBadge').className = 'badge badge-success';
+      }
+
+      document.getElementById('jobIdVal').textContent = data.active_job_id || 'None';
+      document.getElementById('inputFileVal').textContent = data.input_file || 'None';
+      document.getElementById('fpsVal').innerHTML = `${data.instantaneous_fps || 0} <span style="font-size:16px;">FPS</span>`;
+      document.getElementById('framesVal').textContent = `${data.frames_processed || 0} / ${data.total_frames || 0}`;
+
+      const pct = data.total_frames > 0 ? Math.round((data.frames_processed / data.total_frames) * 100) : 0;
+      document.getElementById('pctVal').textContent = `${pct}%`;
+      document.getElementById('jobProgressBar').style.width = `${pct}%`;
+
+      document.getElementById('elapsedVal').textContent = `${data.elapsed_sec || 0}s`;
+      document.getElementById('etaVal').textContent = `${data.estimated_remaining_sec || 0}s`;
+
+      document.getElementById('connBadge').style.borderColor = 'rgba(16, 185, 129, 0.4)';
+      document.getElementById('connText').textContent = 'Connected (:8765)';
+    }
+  } catch (e) {
+    document.getElementById('connText').textContent = 'Polling (:8765)';
+  }
+}
+
+async function probeEndpoint(path) {
+  try {
+    const res = await fetch(`http://127.0.0.1:8765${path}`);
+    const data = await res.json();
+    alert(`Response from ${path} (Status ${res.status}):\n` + JSON.stringify(data, null, 2));
+  } catch (e) {
+    alert(`Failed to reach ${path}: ${e.message}`);
+  }
+}
+
+async function triggerShutdown() {
+  if (confirm("Send POST /shutdown to application engine?")) {
+    try {
+      const res = await fetch('http://127.0.0.1:8765/shutdown', { method: 'POST' });
+      const data = await res.json();
+      alert("Shutdown signal received: " + JSON.stringify(data));
+    } catch (e) {
+      alert("Error sending shutdown: " + e.message);
+    }
+  }
+}
+
+// Canvas Sparkline Chart
+function drawTelemetryChart() {
+  const canvas = document.getElementById('telemetryCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.offsetWidth;
+  const h = canvas.height = canvas.offsetHeight;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background Grid Lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  for (let y = 0; y < h; y += 30) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  // Generate synthetic smooth curve if empty
+  if (telemetryHistory.cpu.length < 2) {
+    for (let i = 0; i < 30; i++) {
+      telemetryHistory.cpu.push(20 + Math.sin(i * 0.3) * 15 + Math.random() * 5);
+      telemetryHistory.ram.push(150 + i * 0.5 + Math.random() * 2);
+      telemetryHistory.fps.push(45 + Math.cos(i * 0.2) * 10);
+    }
+  }
+
+  function drawLine(data, color, maxVal) {
+    if (data.length < 2) return;
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    const step = w / (data.length - 1);
+    for (let i = 0; i < data.length; i++) {
+      const x = i * step;
+      const y = h - (data[i] / maxVal * (h - 20)) - 10;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  drawLine(telemetryHistory.cpu, '#38bdf8', 100);
+  drawLine(telemetryHistory.ram, '#a855f7', 300);
+  drawLine(telemetryHistory.fps, '#10b981', 120);
+}
+
+// Log Stream fetcher
+async function fetchLogs() {
+  const stream = document.getElementById('logStreamSelect').value;
+  try {
+    const res = await fetch(`/api/logs?stream=${stream}`);
+    if (res.ok) {
+      const data = await res.json();
+      const term = document.getElementById('logTerminal');
+      term.innerHTML = '';
+      if (data.lines && data.lines.length > 0) {
+        data.lines.forEach(line => {
+          let lvl = 'INFO';
+          if (line.includes('"level": "ERROR"') || line.includes('[ERROR]')) lvl = 'ERROR';
+          else if (line.includes('"level": "WARNING"') || line.includes('[WARNING]')) lvl = 'WARNING';
+          else if (line.includes('"level": "DEBUG"') || line.includes('[DEBUG]')) lvl = 'DEBUG';
+          const div = document.createElement('div');
+          div.className = `log-line ${lvl}`;
+          div.textContent = line;
+          term.appendChild(div);
+        });
+        term.scrollTop = term.scrollHeight;
+      } else {
+        term.innerHTML = `<div class="log-line DEBUG">[INFO] No entries in ${stream} stream yet.</div>`;
+      }
+    }
+  } catch (e) {
+    // Standalone fallback
+  }
+}
+
+function filterLogs() {
+  const query = document.getElementById('logSearch').value.toLowerCase();
+  document.querySelectorAll('#logTerminal .log-line').forEach(line => {
+    if (line.textContent.toLowerCase().includes(query)) {
+      line.style.display = 'block';
+    } else {
+      line.style.display = 'none';
+    }
+  });
+}
+
+// Database jobs fetcher
+async function fetchRecentJobs() {
+  try {
+    const res = await fetch('/api/jobs');
+    if (res.ok) {
+      const data = await res.json();
+      const tbody = document.getElementById('jobsTableBody');
+      if (data.jobs && data.jobs.length > 0) {
+        tbody.innerHTML = '';
+        data.jobs.forEach(j => {
+          const badgeClass = j.result === 'SUCCESS' ? 'badge-success' : (j.result === 'FAILED' ? 'badge-failed' : 'badge-transcoding');
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><code>${j.job_id || '-'}</code></td>
+            <td>${j.source_filename || '-'}</td>
+            <td>${j.wall_time_sec ? j.wall_time_sec + 's' : '-'}</td>
+            <td>${j.avg_fps ? j.avg_fps + ' fps' : '-'}</td>
+            <td>${j.realtime_factor ? j.realtime_factor + 'x' : '-'}</td>
+            <td><span class="badge ${badgeClass}">${j.result || j.state || 'UNKNOWN'}</span></td>
+            <td>${j.failure_category ? '<strong>' + j.failure_category + '</strong>: ' + (j.error_message || '') : '-'}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    }
+  } catch (e) {
+    // Standalone fallback
+  }
+}
+
+// Polling interval
+setInterval(() => {
+  probeHealth();
+  if (currentTab === 'tab-live') {
+    drawTelemetryChart();
+  } else if (currentTab === 'tab-logs') {
+    fetchLogs();
+  }
+}, 1500);
+
+window.addEventListener('load', () => {
+  drawTelemetryChart();
+  updateConfigPreview();
+  updateChaosLabels();
+  probeHealth();
+  fetchRecentJobs();
+});
+</script>
+
+</body>
+</html>

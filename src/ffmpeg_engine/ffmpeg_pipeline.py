@@ -19,6 +19,11 @@ from src.common.logger import setup_logger
 from src.ffmpeg_engine.decoder_bridge import DecoderBridge, ClipMetadata
 from src.ffmpeg_engine.lut_manager import LutManager
 
+try:
+    from debug_tools.core.health_server import global_app_state
+except ImportError:
+    global_app_state = None
+
 logger = setup_logger("ffmpeg_pipeline")
 
 
@@ -119,6 +124,21 @@ class FFmpegPipeline:
 
         use_main10 = (self.config.encoding_profile.lower() == "main10")
 
+        def _internal_progress(progress_data: Dict[str, Any]):
+            if global_app_state:
+                try:
+                    frame_cur = progress_data.get("frame", 0)
+                    frame_tot = progress_data.get("total", 0)
+                    fps = float(progress_data.get("fps", 0.0))
+                    global_app_state.update_progress(frame_cur, frame_tot, fps)
+                except Exception:
+                    pass
+            if progress_callback:
+                try:
+                    progress_callback(progress_data)
+                except Exception:
+                    pass
+
         # 3. High-Performance In-Process Metal + VideoToolbox Route
         res_cfg = str(self.config.resolution).lower()
         if sys.platform == "darwin" and res_cfg == "source":
@@ -131,7 +151,7 @@ class FFmpegPipeline:
                 bitrate_mbps=bitrate_mbps,
                 use_main10=use_main10,
                 ffmpeg_path=self.ffmpeg_path,
-                progress_callback=progress_callback,
+                progress_callback=_internal_progress,
                 cancel_checker=lambda: self._is_cancelled,
             )
             if success:
@@ -281,8 +301,7 @@ class FFmpegPipeline:
                         )
                         sys.stdout.flush()
 
-                        if progress_callback:
-                            progress_callback(progress_data)
+                        _internal_progress(progress_data)
                     except Exception:
                         pass
 
