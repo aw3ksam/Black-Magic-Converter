@@ -194,21 +194,24 @@ class DashboardServerHandler(BaseHTTPRequestHandler):
                 self._send_html(404, "<h1>dashboard.html not found</h1>")
 
         elif path == "/api/logs":
-            stream = params.get("stream", "harness")
+            stream = params.get("stream", "braw_watcher")
             logs_dir = Path(__file__).resolve().parent.parent / "logs"
-            ext = ".jsonl" if stream == "results" else ".log"
-            target_log = logs_dir / f"{stream}{ext}"
+            if stream.endswith(".log") or stream.endswith(".jsonl"):
+                target_log = logs_dir / stream
+            else:
+                ext = ".jsonl" if stream == "results" else ".log"
+                target_log = logs_dir / f"{stream}{ext}"
 
             lines = []
             if target_log.is_file():
                 try:
                     with open(target_log, "r", encoding="utf-8", errors="ignore") as f:
                         all_lines = f.readlines()
-                        lines = [line.strip() for line in all_lines[-100:]]
+                        lines = [line.strip() for line in all_lines[-150:]]
                 except Exception as e:
                     lines = [f"[ERROR] Could not read log file: {e}"]
             else:
-                lines = [f"[INFO] Log file {stream}{ext} does not exist yet."]
+                lines = [f"[INFO] Log file {target_log.name} does not exist yet."]
 
             self._send_json(200, {"stream": stream, "lines": lines})
 

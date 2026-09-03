@@ -277,22 +277,39 @@ public:
         int64_t value = (int64_t)std::round((double)frameIndex * 1000.0);
         CMTime presentationTime = CMTimeMake(value, (int32_t)timescale);
 
+        // Wait up to 10.0 seconds (5000 * 2ms) for hardware encoder backpressure to clear
         int retry = 0;
-        while (!videoInput.isReadyForMoreMediaData && retry < 1000) {
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
+        const int maxRetries = 5000;
+        while (!videoInput.isReadyForMoreMediaData && retry < maxRetries) {
+            if (writer.status == AVAssetWriterStatusFailed || writer.status == AVAssetWriterStatusCancelled) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
             retry++;
         }
 
         if (!videoInput.isReadyForMoreMediaData) {
-            std::cerr << "Warning: Video input stalled waiting for ready state at frame " << frameIndex << std::endl;
+            std::string errStr = writer.error ? [[writer.error localizedDescription] UTF8String] : "Encoder input timed out waiting for ready state";
+            std::cerr << "Error: Video input stalled at frame " << frameIndex 
+                      << " (status " << (int)writer.status << "): " << errStr << std::endl;
+            CVPixelBufferRelease(pixelBuffer);
+            return false;
         }
 
-        BOOL success = [adaptor appendPixelBuffer:pixelBuffer withPresentationTime:presentationTime];
+        BOOL success = NO;
+        @try {
+            success = [adaptor appendPixelBuffer:pixelBuffer withPresentationTime:presentationTime];
+        } @catch (NSException *e) {
+            std::cerr << "Exception: Uncaught NSException in appendPixelBuffer at frame " << frameIndex 
+                      << ": " << [[e reason] UTF8String] << std::endl;
+            success = NO;
+        }
         CVPixelBufferRelease(pixelBuffer);
 
         if (!success) {
+            std::string errStr = writer.error ? [[writer.error localizedDescription] UTF8String] : "Unknown append failure";
             std::cerr << "Error: appendPixelBuffer failed for frame " << frameIndex << ": " 
-                      << [[writer.error localizedDescription] UTF8String] << std::endl;
+                      << errStr << std::endl;
             return false;
         }
 

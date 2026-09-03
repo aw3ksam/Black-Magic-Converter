@@ -73,6 +73,15 @@ class TestHealthServer(unittest.TestCase):
             self.assertIn("Black Magic Converter", content)
             self.assertIn("dashboard", content.lower())
 
+    def test_logs_endpoint(self):
+        url = f"http://127.0.0.1:{self.port}/api/logs?stream=braw_watcher"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data["stream"], "braw_watcher")
+            self.assertIsInstance(data["lines"], list)
+
 
 if __name__ == "__main__":
     unittest.main()

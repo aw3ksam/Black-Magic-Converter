@@ -152,6 +152,14 @@ class HealthRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0]
+        params = {}
+        if "?" in self.path:
+            raw_params = self.path.split("?", 1)[1]
+            for p in raw_params.split("&"):
+                if "=" in p:
+                    k, v = p.split("=", 1)
+                    params[k] = v
+
         if path in ("/", "/dashboard"):
             dashboard_file = Path(__file__).resolve().parent.parent / "dashboard.html"
             if dashboard_file.is_file():
@@ -159,6 +167,27 @@ class HealthRequestHandler(BaseHTTPRequestHandler):
                     self._send_html(200, f.read())
             else:
                 self._send_html(200, "<h1>Black Magic Converter Debug Dashboard</h1><p>dashboard.html not found.</p>")
+        elif path == "/api/logs":
+            stream = params.get("stream", "braw_watcher")
+            logs_dir = Path(__file__).resolve().parent.parent.parent / "logs"
+            if stream.endswith(".log") or stream.endswith(".jsonl"):
+                target_log = logs_dir / stream
+            else:
+                ext = ".jsonl" if stream == "results" else ".log"
+                target_log = logs_dir / f"{stream}{ext}"
+
+            lines = []
+            if target_log.is_file():
+                try:
+                    with open(target_log, "r", encoding="utf-8", errors="ignore") as f:
+                        all_lines = f.readlines()
+                        lines = [line.strip() for line in all_lines[-150:]]
+                except Exception as e:
+                    lines = [f"[ERROR] Could not read log file: {e}"]
+            else:
+                lines = [f"[INFO] Log file {target_log.name} does not exist yet."]
+
+            self._send_json(200, {"stream": stream, "lines": lines})
         elif path == "/health":
             self._send_json(200, global_app_state.get_health_dict())
         elif path == "/status":
@@ -169,7 +198,7 @@ class HealthRequestHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json(503, {"ready": False, "state": global_app_state.state})
         else:
-            self._send_json(404, {"error": "Not Found", "available_routes": ["/dashboard", "/health", "/status", "/ready", "/shutdown"]})
+            self._send_json(404, {"error": "Not Found", "available_routes": ["/dashboard", "/health", "/status", "/ready", "/shutdown", "/api/logs"]})
 
     def do_POST(self):
         path = self.path.split("?")[0]

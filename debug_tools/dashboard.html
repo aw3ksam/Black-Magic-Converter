@@ -628,18 +628,29 @@
       <div class="card-header">
         <div style="display: flex; align-items: center; gap: 12px;">
           <div class="card-title">Live Multi-Stream Log Console</div>
-          <select class="form-control" style="width: auto;" id="logStreamSelect" onchange="fetchLogs()">
-            <option value="harness">harness.log</option>
-            <option value="application">application.log</option>
-            <option value="errors">errors.log</option>
-            <option value="transcodes">transcodes.log</option>
-            <option value="performance">performance.log</option>
-            <option value="watchdog">watchdog.log</option>
-            <option value="results">results.jsonl</option>
+          <select class="form-control" style="width: auto;" id="logStreamSelect" onchange="fetchLogs(true)">
+            <optgroup label="Live Application Logs">
+              <option value="braw_watcher" selected>braw_watcher.log (Hot Folder Ingest)</option>
+              <option value="decoder_bridge">decoder_bridge.log (Metal Engine)</option>
+              <option value="ffmpeg_pipeline">ffmpeg_pipeline.log (Transcode Engine)</option>
+              <option value="braw_cli">braw_cli.log (CLI Daemon)</option>
+            </optgroup>
+            <optgroup label="Test Suite & Harness">
+              <option value="harness">harness.log</option>
+              <option value="application">application.log</option>
+              <option value="errors">errors.log</option>
+              <option value="transcodes">transcodes.log</option>
+              <option value="performance">performance.log</option>
+              <option value="watchdog">watchdog.log</option>
+              <option value="results">results.jsonl</option>
+            </optgroup>
           </select>
         </div>
-        <div style="display: flex; gap: 8px;">
+        <div style="display: flex; gap: 8px; align-items: center;">
           <input type="text" class="form-control" style="width: 200px;" id="logSearch" placeholder="Filter logs..." onkeyup="filterLogs()">
+          <label style="display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; user-select: none; color: var(--text-muted);">
+            <input type="checkbox" id="chkAutoScroll" checked> Auto-scroll
+          </label>
           <button class="btn btn-secondary" onclick="clearLogs()">Clear</button>
         </div>
       </div>
@@ -894,12 +905,31 @@
 let currentTab = 'tab-live';
 let telemetryHistory = { cpu: [], ram: [], fps: [] };
 
-function switchTab(tabId) {
+function switchTab(tabId, save = true) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById(tabId).classList.add('active');
+  
+  const targetBtn = document.querySelector(`.tab-btn[onclick*="${tabId}"]`);
+  if (targetBtn) {
+    targetBtn.classList.add('active');
+  } else if (event && event.target && event.target.classList.contains('tab-btn')) {
+    event.target.classList.add('active');
+  }
+  
+  const content = document.getElementById(tabId);
+  if (content) content.classList.add('active');
   currentTab = tabId;
+
+  if (save) {
+    try {
+      localStorage.setItem('bmc_debug_active_tab', tabId);
+      window.location.hash = tabId;
+    } catch (e) {}
+  }
+
+  if (tabId === 'tab-logs') {
+    fetchLogs(true);
+  }
 }
 
 function updateConfigPreview() {
@@ -1083,17 +1113,42 @@ function drawTelemetryChart() {
   drawLine(telemetryHistory.fps, '#10b981', 120);
 }
 
+let lastLogStream = '';
+let lastLogLinesJson = '';
+
+function getApiBaseUrl() {
+  if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+    return window.location.origin;
+  }
+  return 'http://127.0.0.1:8765';
+}
+
 // Log Stream fetcher
-async function fetchLogs() {
+async function fetchLogs(forceReset = false) {
   const stream = document.getElementById('logStreamSelect').value;
+  const apiBase = getApiBaseUrl();
   try {
-    const res = await fetch(`/api/logs?stream=${stream}`);
+    const res = await fetch(`${apiBase}/api/logs?stream=${stream}`);
     if (res.ok) {
       const data = await res.json();
+      const lines = data.lines || [];
+      const linesJson = JSON.stringify(lines);
+
+      if (!forceReset && stream === lastLogStream && linesJson === lastLogLinesJson) {
+        return;
+      }
+      lastLogStream = stream;
+      lastLogLinesJson = linesJson;
+
       const term = document.getElementById('logTerminal');
+      const shouldAutoScroll = document.getElementById('chkAutoScroll') ? document.getElementById('chkAutoScroll').checked : true;
+      const isNearBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) < 60;
+
       term.innerHTML = '';
-      if (data.lines && data.lines.length > 0) {
-        data.lines.forEach(line => {
+      const filterQuery = (document.getElementById('logSearch').value || '').toLowerCase();
+
+      if (lines.length > 0) {
+        lines.forEach(line => {
           let lvl = 'INFO';
           if (line.includes('"level": "ERROR"') || line.includes('[ERROR]')) lvl = 'ERROR';
           else if (line.includes('"level": "WARNING"') || line.includes('[WARNING]')) lvl = 'WARNING';
@@ -1101,9 +1156,15 @@ async function fetchLogs() {
           const div = document.createElement('div');
           div.className = `log-line ${lvl}`;
           div.textContent = line;
+          if (filterQuery && !line.toLowerCase().includes(filterQuery)) {
+            div.style.display = 'none';
+          }
           term.appendChild(div);
         });
-        term.scrollTop = term.scrollHeight;
+
+        if (shouldAutoScroll && (forceReset || isNearBottom)) {
+          term.scrollTop = term.scrollHeight;
+        }
       } else {
         term.innerHTML = `<div class="log-line DEBUG">[INFO] No entries in ${stream} stream yet.</div>`;
       }
@@ -1485,6 +1546,11 @@ async function stopTool2Batch() {
 }
 
 window.addEventListener('load', () => {
+  const hash = window.location.hash ? window.location.hash.substring(1) : null;
+  const savedTab = hash || localStorage.getItem('bmc_debug_active_tab') || 'tab-live';
+  if (document.getElementById(savedTab)) {
+    switchTab(savedTab, false);
+  }
   drawTelemetryChart();
   updateConfigPreview();
   updateChaosLabels();

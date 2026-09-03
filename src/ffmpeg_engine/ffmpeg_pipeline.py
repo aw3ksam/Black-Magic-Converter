@@ -162,7 +162,7 @@ class FFmpegPipeline:
         filters: List[str] = []
         if lut_path:
             escaped_lut = str(lut_path).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
-            filters.append(f"lut3d=file='{escaped_lut}':interp=tetrahedral")
+            filters.append(f"lut3d=file='{escaped_lut}':interp=trilinear")
 
         if res_cfg != "source":
             if res_cfg in ("4k", "3840x2160"):
