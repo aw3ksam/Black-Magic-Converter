@@ -10,6 +10,8 @@ This document defines the core architecture rules, build guidelines, and securit
 * **Legacy References**:
   * `versions/v1-davinci-dependent/`: V1 headless Python CLI daemon.
   * `versions/v2-gui/`: V2 macOS-only Swift/SwiftUI app.
+  * `versions/v3-electron/`: V3 Electron desktop app snapshot.
+  * `versions/v4-camera-ingest/`: V4 Camera Ingest (PYXIS 6K) & Electron desktop app snapshot.
 * **Core Engine**: The standalone transcoding engine (`src/native/braw_decode.mm`, `src/ffmpeg_engine/`, `src/cli.py`, `src/common/`) is orchestrated by the Electron Main process with zero dependency on DaVinci Resolve. Built-in Blackmagic 3D LUTs reside in `assets/luts/`.
 
 ---
@@ -82,3 +84,13 @@ npm test
 # 2. Verify Electron Forge build & packaging succeeds
 npm run package
 ```
+
+---
+
+## 6. Imported Code & Modules Integration Protocol (`import/`)
+
+When the user places external projects, tools, or modules into `import/` and requests their integration:
+1. **Functionality Over Files**: Never blindly copy entire foreign repos or folders into `src/` or `debug_tools/`. Extract, rewrite, or adapt only the requested functionality to fit this project natively.
+2. **Strict Architecture & Security**: Ensure adapted code complies with Electron sandboxing/context isolation (Section 3) and unbuffered/pipeline contracts (Section 4).
+3. **Reference Full Protocol**: See [import/AGENTS.md](import/AGENTS.md) and [import/README.md](import/README.md) for detailed guidelines and subsystem mapping.
+

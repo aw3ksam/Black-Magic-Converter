@@ -389,3 +389,41 @@ npm run package
 # 4. Launch an automated endurance smoke test
 python3 debug_tools/run_endurance.py --config debug_tools/config/endurance_config.yaml --duration 5
 ```
+
+---
+
+## 10. Blackmagic Camera Tooling Subsystem (Tool 1 & Tool 2)
+
+```mermaid
+graph LR
+    subgraph CameraHW [Blackmagic PYXIS 6K / Cinema Camera 6K]
+        REST[REST API Server :80<br/>/control/api/v1]
+        FTPD[FTP Server :21<br/>ftp://PYXIS-6K.local]
+    end
+
+    subgraph CameraTools [Camera Subsystem (src/camera/)]
+        CC[CameraClient] -->|HTTP GET/POST/PUT| REST
+        FC[FtpClient] -->|FTP RETR with Progress| FTPD
+        T1[Tool 1: AutoTransferTool] --> CC
+        T1 --> FC
+        T2[Tool 2: BatchRecorderTool] --> CC
+    end
+
+    subgraph Destinations [Pipeline Integration]
+        T1 -->|Atomic Ingest| INGEST[watch_folders/00_IN_INGEST]
+        T2 -->|Automated Sequences| REST
+        DASH[serve_dashboard.py :8766] --> T1
+        DASH --> T2
+        MAIN[Electron Main Process v4.0] --> T1
+    end
+```
+
+### Camera Endpoints & Communication Contracts
+
+| Component | Protocol | Default Address | Function |
+| :--- | :--- | :--- | :--- |
+| **REST Control** | HTTP / JSON | `http://192.168.1.118/control/api/v1` | Device metadata, transport record status, clip index, sensor format configuration. |
+| **FTP Transfer** | FTP Binary | `ftp://PYXIS-6K.local` (or `192.168.1.118`) | High-speed clip transfer with byte-accurate verification and progress streaming. |
+| **Tool 1 (Auto Ingest)** | Python Thread | Direct to `00_IN_INGEST` | Monitors camera state (`recording: true -> false`), snapshots baseline clips to ignore pre-existing files, and queues downloads. |
+| **Tool 2 (Batch Generator)** | Python Thread | Direct to Camera REST | 1-Hour Presets (15s x 240, 30s x 120, 45s x 80, 60s x 60) or custom sequences for endurance testing. |
+

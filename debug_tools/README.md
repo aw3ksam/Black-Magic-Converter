@@ -27,6 +27,15 @@ python3 debug_tools/run_endurance.py --duration 5 --order seeded_random --seed 4
 python3 debug_tools/run_endurance.py --duration 10 --fault-injection
 ```
 
+### 5. Control Blackmagic Camera (PYXIS 6K) & Automated Ingest
+- **Dashboard Web UI**: Launch `python3 debug_tools/serve_dashboard.py --open` and switch to the **Blackmagic Camera Lab** tab.
+- **Tool 1 (Auto Video Clip Transfer)**: Toggle active to snapshot baseline and download newly shot clips over FTP (`ftp://PYXIS-6K.local`) directly to `00_IN_INGEST`.
+- **Tool 2 (Batch Recording Generator)**: Select a 1-hour preset (15s x 240, 30s x 120, 45s x 80, 60s x 60) or custom sequence and trigger automatic camera recording.
+- **Run Endurance with Live Camera Batches**:
+```bash
+python3 debug_tools/run_endurance.py --duration 30 --camera-batch --camera-ip 192.168.1.118 --camera-clip-duration 30
+```
+
 ---
 
 ## Directory Architecture

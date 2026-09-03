@@ -313,6 +313,7 @@
   <button class="tab-btn" onclick="switchTab('tab-tolerances')">🔍 Tolerances & Quality</button>
   <button class="tab-btn" onclick="switchTab('tab-logs')">🪵 Multi-Stream Logs</button>
   <button class="tab-btn" onclick="switchTab('tab-runs')">🗄️ Database & Runs</button>
+  <button class="tab-btn" onclick="switchTab('tab-camera')">🎥 Blackmagic Camera Lab (PYXIS 6K)</button>
 </nav>
 
 <main>
@@ -678,6 +679,215 @@
     </div>
   </section>
 
+  <!-- TAB 7: BLACKMAGIC CAMERA LAB (TOOL 1 & TOOL 2) -->
+  <section id="tab-camera" class="tab-content">
+    <div class="grid-4">
+      <div class="card">
+        <div class="card-title">Camera Model & Status</div>
+        <div class="card-stat-val" id="camStatusModel" style="color: var(--accent-purple); font-size: 20px;">Checking...</div>
+        <div class="card-stat-desc" id="camStatusIp">IP: 192.168.1.118</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Transport State</div>
+        <div class="card-stat-val" id="camStatusTransport" style="color: var(--accent-blue);">STANDBY</div>
+        <div class="card-stat-desc" id="camStatusTimecode">Timecode: --:--:--:--</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Active Media Disk</div>
+        <div class="card-stat-val" id="camStatusDisk" style="color: var(--accent-emerald);">--</div>
+        <div class="card-stat-desc" id="camStatusDiskRemain">Remaining: -- min | Free: -- GB</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Tool 1: Auto Transfer</div>
+        <div class="card-stat-val" id="camStatusTool1" style="color: var(--accent-amber);">INACTIVE</div>
+        <div class="card-stat-desc" id="camStatusTool1Meta">0 clips transferred</div>
+      </div>
+    </div>
+
+    <!-- Row 1: Connection & Settings -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-header">
+        <div class="card-title">Blackmagic Camera Network Connection (PYXIS 6K / Cinema Camera 6K)</div>
+        <span class="badge badge-transcoding" id="camConnBadge">REST API + FTP</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 12px;">
+        <div class="form-group">
+          <label class="form-label" for="cfgCameraIp">Camera IP Address</label>
+          <input type="text" id="cfgCameraIp" class="form-control" value="192.168.1.118" placeholder="e.g. 192.168.1.118">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cfgCameraFtp">Camera FTP URL / Host</label>
+          <input type="text" id="cfgCameraFtp" class="form-control" value="ftp://PYXIS-6K.local" placeholder="e.g. ftp://PYXIS-6K.local">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cfgCameraDest">Destination Ingest Folder</label>
+          <input type="text" id="cfgCameraDest" class="form-control" value="watch_folders/00_IN_INGEST" placeholder="e.g. watch_folders/00_IN_INGEST">
+        </div>
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: 14px; align-items: center;">
+        <button class="btn btn-primary" onclick="saveAndConnectCamera()">⚡ Save & Connect</button>
+        <button class="btn btn-secondary" onclick="testCameraConnection()">🔍 Test Ping & Authentication</button>
+        <div id="camTestResult" style="font-size: 12px; font-family: var(--font-mono); color: var(--text-muted);"></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- TOOL 1: AUTO VIDEO CLIP TRANSFER -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Tool 1: Auto Video Clip Transfer Engine</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+              Snapshots existing clips on activation; transfers new .braw recordings over FTP directly to Ingest.
+            </div>
+          </div>
+          <span class="badge badge-transcoding" id="tool1StateBadge">IDLE</span>
+        </div>
+
+        <div class="switch-container" style="margin-top: 12px;">
+          <div>
+            <span class="switch-label">Automated Clip Transfer Service</span>
+            <span class="switch-sub" id="tool1BaselineNote">Snapshots storage to ignore pre-existing recordings</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="swTool1Toggle" onchange="toggleTool1(this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin: 16px 0;">
+          <button class="btn btn-secondary" style="flex: 1;" onclick="triggerTool1ImportToday()">
+            📅 Import Today's Clips Retroactively
+          </button>
+        </div>
+
+        <!-- Active Transfer Strip -->
+        <div id="camTransferActiveWrap" style="background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 14px; margin-bottom: 16px; display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-weight: 700; font-family: var(--font-mono); font-size: 13px; color: var(--accent-blue);" id="camActiveFileName">Downloading clip...</span>
+            <span class="badge badge-transcoding" id="camActiveSpeed">0.0 MB/s</span>
+          </div>
+          <div class="progress-bar-bg" style="margin: 6px 0;">
+            <div class="progress-bar-fill" id="camTransferProgressBar" style="width: 0%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted);">
+            <span id="camActivePercent">0%</span>
+            <span id="camActiveEta">ETA: 0.0s</span>
+          </div>
+        </div>
+
+        <!-- Recent Transfers Table -->
+        <div class="card-title" style="font-size: 13px; margin-bottom: 8px;">Recent Camera Transfers</div>
+        <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: 6px;">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Size</th>
+                <th>Speed</th>
+                <th>Duration</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="camTransfersTableBody">
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--text-subtle); padding: 14px;">No files transferred yet. Activate Tool 1 and record a clip.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TOOL 2: BATCH VIDEO RECORDING GENERATOR -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Tool 2: Batch Video Recording Generator</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+              Automates generation of 15s/30s/45s/60s test clips (~1 hour footage) or custom suites for engine validation.
+            </div>
+          </div>
+          <span class="badge badge-transcoding" id="tool2StateBadge">IDLE</span>
+        </div>
+
+        <!-- Presets -->
+        <div style="margin: 14px 0;">
+          <label class="form-label">1-Hour Debug Duration Presets</label>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px;">
+            <button class="btn btn-secondary tool2-preset-btn" onclick="setTool2Preset(15, 240)">15s (240 clips)</button>
+            <button class="btn btn-secondary tool2-preset-btn" onclick="setTool2Preset(30, 120)">30s (120 clips)</button>
+            <button class="btn btn-secondary tool2-preset-btn" onclick="setTool2Preset(45, 80)">45s (80 clips)</button>
+            <button class="btn btn-secondary tool2-preset-btn active" onclick="setTool2Preset(60, 60)">60s (60 clips)</button>
+          </div>
+        </div>
+
+        <!-- Custom Duration & Count -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label class="form-label" for="tool2Duration">Clip Duration (seconds)</label>
+            <input type="number" id="tool2Duration" class="form-control" value="60" min="1" max="3600" oninput="updateTool2Calc()">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tool2Count">Clip Count (number of clips)</label>
+            <input type="number" id="tool2Count" class="form-control" value="60" min="1" max="1000" oninput="updateTool2Calc()">
+          </div>
+        </div>
+
+        <!-- Codec and Resolution -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div class="form-group">
+            <label class="form-label" for="tool2Codec">Recording Codec</label>
+            <select id="tool2Codec" class="form-control">
+              <option value="BRaw:8_1">Blackmagic RAW 8:1 (Default)</option>
+              <option value="BRaw:5_1">Blackmagic RAW 5:1</option>
+              <option value="BRaw:3_1">Blackmagic RAW 3:1</option>
+              <option value="BRaw:12_1">Blackmagic RAW 12:1</option>
+              <option value="BRaw:Q0">Blackmagic RAW Q0</option>
+              <option value="BRaw:Q5">Blackmagic RAW Q5</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tool2Resolution">Record Resolution</label>
+            <select id="tool2Resolution" class="form-control">
+              <option value='{"width": 4096, "height": 2304}'>4K 16:9 (4096x2304)</option>
+              <option value='{"width": 6048, "height": 4032}'>6K Open Gate 3:2 (6048x4032)</option>
+              <option value='{"width": 6048, "height": 3200}'>6K 17:9 DCI (6048x3200)</option>
+              <option value='{"width": 1920, "height": 1080}'>1080p HD (1920x1080)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-elevated); padding: 8px 12px; border-radius: 6px; margin-bottom: 16px;">
+          <span style="font-size: 12px; color: var(--text-muted);">Batch Total Calculation:</span>
+          <span style="font-weight: 700; font-family: var(--font-mono); color: var(--accent-cyan);" id="tool2CalcSummary">60 clips x 60s = 60m (1.0h)</span>
+        </div>
+
+        <!-- Controls -->
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <button class="btn btn-primary" id="btnTool2Start" style="flex: 2;" onclick="startTool2Batch()">▶ Start Batch Run</button>
+          <button class="btn btn-secondary" id="btnTool2Pause" style="flex: 1;" onclick="pauseTool2Batch()" disabled>⏸ Pause</button>
+          <button class="btn btn-secondary" id="btnTool2Resume" style="flex: 1;" onclick="resumeTool2Batch()" style="display:none;" disabled>▶ Resume</button>
+          <button class="btn btn-danger" id="btnTool2Stop" style="flex: 1;" onclick="stopTool2Batch()" disabled>⏹ Stop</button>
+        </div>
+
+        <!-- Progress Visualizer -->
+        <div style="background: #050811; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-weight: 700; font-family: var(--font-mono); font-size: 13px; color: var(--text-main);" id="tool2ClipProgress">Clip: Standing By</span>
+            <span style="font-size: 12px; font-family: var(--font-mono); color: var(--accent-purple);" id="tool2ClipCountdown">0.0s / 0.0s</span>
+          </div>
+          <div class="progress-bar-bg" style="margin: 6px 0;">
+            <div class="progress-bar-fill" id="tool2ProgressBar" style="width: 0%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-rose));"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted);">
+            <span id="tool2Percent">0% Total Batch</span>
+            <span id="tool2Elapsed">Elapsed: 0.0s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <script>
@@ -951,8 +1161,328 @@ setInterval(() => {
     drawTelemetryChart();
   } else if (currentTab === 'tab-logs') {
     fetchLogs();
+  } else if (currentTab === 'tab-camera') {
+    fetchCameraStatus();
   }
 }, 1500);
+
+// ----------------------------------------------------
+// Blackmagic Camera Tooling (Tool 1 & Tool 2) Client
+// ----------------------------------------------------
+let cameraFormatsLoaded = false;
+
+async function fetchCameraStatus() {
+  try {
+    const res = await fetch('/api/camera/status');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Hardware status
+    const modelEl = document.getElementById('camStatusModel');
+    const ipEl = document.getElementById('camStatusIp');
+    const transportEl = document.getElementById('camStatusTransport');
+    const diskEl = document.getElementById('camStatusDisk');
+    const diskRemainEl = document.getElementById('camStatusDiskRemain');
+    const badgeEl = document.getElementById('camConnBadge');
+
+    if (data.connected && data.product) {
+      modelEl.textContent = data.product.productName || data.product.deviceName || 'PYXIS 6K';
+      modelEl.style.color = 'var(--accent-purple)';
+      ipEl.textContent = `IP: ${data.camera_ip} (SW: ${data.product.softwareVersion || 'v8.6'})`;
+      badgeEl.textContent = 'CAMERA ONLINE';
+      badgeEl.className = 'badge badge-success';
+    } else {
+      modelEl.textContent = 'DISCONNECTED';
+      modelEl.style.color = 'var(--accent-rose)';
+      ipEl.textContent = `Target: ${data.camera_ip}`;
+      badgeEl.textContent = 'OFFLINE / UNREACHABLE';
+      badgeEl.className = 'badge badge-failed';
+    }
+
+    // Transport
+    if (data.recording) {
+      transportEl.textContent = 'RECORDING 🔴';
+      transportEl.style.color = 'var(--accent-rose)';
+    } else {
+      transportEl.textContent = 'STANDBY ⏸';
+      transportEl.style.color = 'var(--accent-blue)';
+    }
+
+    // Disk
+    if (data.active_disk) {
+      diskEl.textContent = data.active_disk.volume || 'USB-C Disk';
+      const freeGb = Math.round((data.active_disk.bytesRemaining || 0) / (1024 * 1024 * 1024));
+      const remainMin = Math.round((data.active_disk.totalExpectedRemainingRecordTimeSeconds || 0) / 60);
+      diskRemainEl.textContent = `Remaining: ${remainMin} min | Free: ${freeGb} GB`;
+    } else {
+      diskEl.textContent = '--';
+      diskRemainEl.textContent = 'No media volume detected';
+    }
+
+    // Tool 1: Auto Transfer Status
+    const t1 = data.tool1 || {};
+    const t1StatusEl = document.getElementById('camStatusTool1');
+    const t1MetaEl = document.getElementById('camStatusTool1Meta');
+    const swTool1 = document.getElementById('swTool1Toggle');
+    const t1Badge = document.getElementById('tool1StateBadge');
+
+    swTool1.checked = !!t1.active;
+    if (t1.active) {
+      t1StatusEl.textContent = 'ACTIVE';
+      t1StatusEl.style.color = 'var(--accent-emerald)';
+      t1Badge.textContent = 'MONITORING';
+      t1Badge.className = 'badge badge-success';
+      document.getElementById('tool1BaselineNote').textContent = 'Monitoring active: ignoring pre-existing recordings';
+    } else {
+      t1StatusEl.textContent = 'INACTIVE';
+      t1StatusEl.style.color = 'var(--accent-amber)';
+      t1Badge.textContent = 'IDLE';
+      t1Badge.className = 'badge badge-transcoding';
+      document.getElementById('tool1BaselineNote').textContent = 'Snapshots storage to ignore pre-existing recordings';
+    }
+    t1MetaEl.textContent = `${t1.total_files || 0} clips (${Math.round((t1.total_bytes || 0) / (1024 * 1024))} MB) transferred`;
+
+    // Active Transfer
+    const activeWrap = document.getElementById('camTransferActiveWrap');
+    if (t1.active_transfer) {
+      activeWrap.style.display = 'block';
+      document.getElementById('camActiveFileName').textContent = t1.active_transfer.file_name || 'Transferring...';
+      document.getElementById('camActiveSpeed').textContent = `${t1.active_transfer.speed_mbps || 0} MB/s`;
+      document.getElementById('camTransferProgressBar').style.width = `${t1.active_transfer.percent || 0}%`;
+      document.getElementById('camActivePercent').textContent = `${t1.active_transfer.percent || 0}% (${Math.round((t1.active_transfer.transferred_bytes || 0) / (1024*1024))} / ${Math.round((t1.active_transfer.total_bytes || 0) / (1024*1024))} MB)`;
+      document.getElementById('camActiveEta').textContent = `ETA: ${t1.active_transfer.eta_seconds || 0}s`;
+    } else {
+      activeWrap.style.display = 'none';
+    }
+
+    // Transfers Table
+    if (t1.history && t1.history.length > 0) {
+      const tbody = document.getElementById('camTransfersTableBody');
+      tbody.innerHTML = '';
+      t1.history.forEach(h => {
+        const tr = document.createElement('tr');
+        const badgeCls = h.status === 'completed' ? 'badge-success' : 'badge-failed';
+        tr.innerHTML = `
+          <td><code>${h.file_name}</code></td>
+          <td>${Math.round((h.file_size || 0) / (1024 * 1024))} MB</td>
+          <td>${h.speed_mbps ? h.speed_mbps + ' MB/s' : '-'}</td>
+          <td>${h.duration_seconds ? h.duration_seconds + 's' : '-'}</td>
+          <td><span class="badge ${badgeCls}">${h.status}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Tool 2: Batch Recorder Status
+    const t2 = data.tool2 || {};
+    const t2Badge = document.getElementById('tool2StateBadge');
+    const t2State = t2.state || 'idle';
+    t2Badge.textContent = t2State.toUpperCase();
+    if (t2State === 'recording') t2Badge.className = 'badge badge-failed';
+    else if (t2State === 'cooldown' || t2State === 'starting') t2Badge.className = 'badge badge-transcoding';
+    else if (t2State === 'completed') t2Badge.className = 'badge badge-success';
+    else t2Badge.className = 'badge badge-transcoding';
+
+    document.getElementById('tool2ClipProgress').textContent = t2.is_active
+      ? `Clip ${t2.current_clip_index} of ${t2.target_clips} (${t2.state})`
+      : 'Batch Standing By';
+    document.getElementById('tool2ClipCountdown').textContent = t2.is_active
+      ? `${t2.current_clip_elapsed}s / ${t2.clip_duration}s`
+      : '0.0s / 0.0s';
+    document.getElementById('tool2ProgressBar').style.width = `${t2.percent || 0}%`;
+    document.getElementById('tool2Percent').textContent = `${t2.percent || 0}% Total Batch`;
+    document.getElementById('tool2Elapsed').textContent = `Total Elapsed: ${t2.elapsed_total_seconds || 0}s`;
+
+    // Button states
+    const btnStart = document.getElementById('btnTool2Start');
+    const btnPause = document.getElementById('btnTool2Pause');
+    const btnResume = document.getElementById('btnTool2Resume');
+    const btnStop = document.getElementById('btnTool2Stop');
+
+    if (t2.is_active) {
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+      if (t2.state === 'paused') {
+        btnPause.style.display = 'none';
+        btnResume.style.display = 'inline-block';
+        btnResume.disabled = false;
+      } else {
+        btnPause.style.display = 'inline-block';
+        btnResume.style.display = 'none';
+        btnPause.disabled = false;
+      }
+    } else {
+      btnStart.disabled = false;
+      btnPause.disabled = true;
+      btnResume.disabled = true;
+      btnStop.disabled = true;
+      btnPause.style.display = 'inline-block';
+      btnResume.style.display = 'none';
+    }
+
+  } catch (e) {
+    // server down / offline
+  }
+}
+
+async function saveAndConnectCamera() {
+  const ip = document.getElementById('cfgCameraIp').value.trim();
+  const ftp = document.getElementById('cfgCameraFtp').value.trim();
+  const dest = document.getElementById('cfgCameraDest').value.trim();
+  const resEl = document.getElementById('camTestResult');
+  resEl.style.color = 'var(--accent-amber)';
+  resEl.textContent = `Saving config and connecting to ${ip}...`;
+
+  try {
+    const res = await fetch('/api/camera/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_ip: ip, camera_ftp: ftp, dest_dir: dest })
+    });
+    if (res.ok) {
+      await testCameraConnection();
+      fetchCameraStatus();
+    }
+  } catch (e) {
+    resEl.style.color = 'var(--accent-rose)';
+    resEl.textContent = "❌ Error saving camera configuration: " + e;
+  }
+}
+
+async function testCameraConnection() {
+  const ip = document.getElementById('cfgCameraIp').value.trim();
+  const ftp = document.getElementById('cfgCameraFtp').value.trim();
+  const resEl = document.getElementById('camTestResult');
+  resEl.textContent = 'Testing HTTP REST and FTP connections...';
+
+  try {
+    const res = await fetch('/api/camera/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_ip: ip, camera_ftp: ftp })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.http_ok && data.ftp_ok) {
+        resEl.style.color = 'var(--accent-emerald)';
+        resEl.textContent = `✅ Connected: ${data.product_name} (REST OK, FTP OK)`;
+      } else {
+        resEl.style.color = 'var(--accent-rose)';
+        resEl.textContent = `⚠️ Partial / Error: REST: ${data.http_ok ? 'OK' : 'FAIL'}, FTP: ${data.ftp_ok ? 'OK' : 'FAIL'}. ${data.error || ''}`;
+      }
+    }
+  } catch (e) {
+    resEl.style.color = 'var(--accent-rose)';
+    resEl.textContent = `❌ Test request failed: ${e}`;
+  }
+}
+
+async function toggleTool1(active) {
+  try {
+    const res = await fetch('/api/camera/tool1/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: active })
+    });
+    if (res.ok) {
+      fetchCameraStatus();
+    }
+  } catch (e) {
+    alert("Error toggling Tool 1: " + e);
+  }
+}
+
+async function triggerTool1ImportToday() {
+  try {
+    const res = await fetch('/api/camera/tool1/import-today', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      alert(`📅 Retroactive Import Triggered: Queued ${data.queued_count || 0} clips shot today.`);
+      fetchCameraStatus();
+    }
+  } catch (e) {
+    alert("Error importing today's clips: " + e);
+  }
+}
+
+function setTool2Preset(duration, count) {
+  document.getElementById('tool2Duration').value = duration;
+  document.getElementById('tool2Count').value = count;
+  document.querySelectorAll('.tool2-preset-btn').forEach(btn => {
+    if (btn.textContent.startsWith(`${duration}s`)) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  updateTool2Calc();
+}
+
+function updateTool2Calc() {
+  const dur = parseInt(document.getElementById('tool2Duration').value, 10) || 0;
+  const count = parseInt(document.getElementById('tool2Count').value, 10) || 0;
+  const totalSec = dur * count;
+  const totalMin = Math.round((totalSec / 60) * 10) / 10;
+  const totalHours = Math.round((totalSec / 3600) * 10) / 10;
+  document.getElementById('tool2CalcSummary').textContent = `${count} clips x ${dur}s = ${totalMin}m (${totalHours}h)`;
+}
+
+async function startTool2Batch() {
+  const duration = parseInt(document.getElementById('tool2Duration').value, 10) || 60;
+  const count = parseInt(document.getElementById('tool2Count').value, 10) || 60;
+  const codec = document.getElementById('tool2Codec').value;
+  const resStr = document.getElementById('tool2Resolution').value;
+  const resObj = JSON.parse(resStr);
+
+  try {
+    const res = await fetch('/api/camera/tool2/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clip_duration: duration,
+        custom_clip_count: count,
+        codec: codec,
+        record_resolution: resObj
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (!data.success) {
+        alert("❌ Failed to start batch: " + (data.error || 'Unknown error'));
+      }
+      fetchCameraStatus();
+    }
+  } catch (e) {
+    alert("Error starting batch: " + e);
+  }
+}
+
+async function pauseTool2Batch() {
+  try {
+    await fetch('/api/camera/tool2/pause', { method: 'POST' });
+    fetchCameraStatus();
+  } catch (e) {
+    alert("Error pausing batch: " + e);
+  }
+}
+
+async function resumeTool2Batch() {
+  try {
+    await fetch('/api/camera/tool2/resume', { method: 'POST' });
+    fetchCameraStatus();
+  } catch (e) {
+    alert("Error resuming batch: " + e);
+  }
+}
+
+async function stopTool2Batch() {
+  try {
+    await fetch('/api/camera/tool2/stop', { method: 'POST' });
+    fetchCameraStatus();
+  } catch (e) {
+    alert("Error stopping batch: " + e);
+  }
+}
 
 window.addEventListener('load', () => {
   drawTelemetryChart();
@@ -960,6 +1490,7 @@ window.addEventListener('load', () => {
   updateChaosLabels();
   probeHealth();
   fetchRecentJobs();
+  fetchCameraStatus();
 });
 </script>
 

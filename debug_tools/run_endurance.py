@@ -80,6 +80,23 @@ def main():
         action="store_true",
         help="Do not spawn the transcoding application (assume already running externally)",
     )
+    parser.add_argument(
+        "--camera-batch",
+        action="store_true",
+        help="Simultaneously trigger automated Blackmagic camera batch recordings",
+    )
+    parser.add_argument(
+        "--camera-ip",
+        type=str,
+        default="192.168.1.118",
+        help="Blackmagic Camera IP address (default: 192.168.1.118)",
+    )
+    parser.add_argument(
+        "--camera-clip-duration",
+        type=int,
+        default=60,
+        help="Batch clip duration in seconds (default: 60)",
+    )
 
     args = parser.parse_args()
 
@@ -157,8 +174,22 @@ def main():
         runner.telemetry.set_app_pid(supervisor.app_process.pid)
         runner._supervisor_pid = supervisor.app_process.pid
 
+    camera_tool = None
+    if args.camera_batch:
+        try:
+            from src.camera.camera_client import CameraClient
+            from src.camera.tool_batch_recorder import BatchRecorderTool
+            cam_client = CameraClient(host=args.camera_ip)
+            camera_tool = BatchRecorderTool(camera_client=cam_client)
+            print(f"Triggering automated camera batch recordings on {args.camera_ip} ({args.camera_clip_duration}s per clip)...")
+            camera_tool.start_batch(clip_duration=args.camera_clip_duration)
+        except Exception as e:
+            print(f"Warning: Could not start camera batch generator: {e}")
+
     def handle_shutdown(signum, frame):
         print("\nShutdown requested. Finalizing active jobs and generating reports...")
+        if camera_tool and camera_tool.is_active:
+            camera_tool.stop_batch()
         runner._interrupted = True
         runner.running = False
 
@@ -168,6 +199,8 @@ def main():
     try:
         runner_summary = runner.run_endurance_loop()
     finally:
+        if camera_tool and camera_tool.is_active:
+            camera_tool.stop_batch()
         if supervisor:
             print("Shutting down supervised application...")
             supervisor.stop()

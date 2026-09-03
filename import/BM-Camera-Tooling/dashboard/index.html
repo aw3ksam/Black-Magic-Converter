@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blackmagic Camera Tooling Suite</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="brand-logo">
+          <span class="brand-icon">🎥</span>
+          <div class="brand-info">
+            <h1>Blackmagic Camera Tooling</h1>
+            <p class="subtitle" id="camera-model-badge">Connecting to PYXIS 6K...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Live Recording Indicator -->
+        <div class="rec-badge" id="rec-indicator">
+          <span class="rec-dot"></span>
+          <span class="rec-text" id="rec-status-text">STANDBY</span>
+        </div>
+
+        <!-- Connection Badge -->
+        <div class="status-pill" id="conn-badge">
+          <span class="status-dot"></span>
+          <span id="conn-text">Camera Checking</span>
+        </div>
+
+        <!-- Storage Info -->
+        <div class="storage-widget">
+          <div class="storage-info">
+            <span class="storage-label" id="disk-name">Storage: --</span>
+            <span class="storage-val" id="disk-space">-- GB Free</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="disk-progress" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="dashboard-grid">
+      <!-- TOOL 1: Auto Video Clip Transfer -->
+      <section class="tool-card" id="card-tool1">
+        <div class="card-header">
+          <div class="card-title-group">
+            <div class="tool-badge badge-blue">Tool 1</div>
+            <h2>Auto Clip Transfer</h2>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="tool1-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <p class="card-desc">
+          Automatically transfers new video recordings over FTP as soon as recording finishes. Pre-existing clips on camera storage are ignored.
+        </p>
+
+        <!-- Destination Directory Setting -->
+        <div class="form-group">
+          <label for="tool1-dest-dir">Local Destination Folder</label>
+          <div class="input-with-btn">
+            <input type="text" id="tool1-dest-dir" value="./transfers" placeholder="e.g. /Users/studio/Downloads/PYXIS">
+            <button class="btn btn-secondary btn-sm" id="btn-save-dest">Save</button>
+          </div>
+        </div>
+
+        <!-- Same-Day Import Action -->
+        <div class="same-day-box">
+          <div class="same-day-desc">
+            <strong>Forgot to activate the tool?</strong>
+            <span>Import all recordings captured earlier today.</span>
+          </div>
+          <button class="btn btn-warning btn-sm" id="btn-import-today">
+            <span class="btn-icon">⚡</span> Import Today's Clips
+          </button>
+        </div>
+
+        <!-- Active Transfer Box -->
+        <div class="active-transfer-card" id="active-transfer-box" style="display: none;">
+          <div class="active-transfer-header">
+            <span class="transferring-label">Downloading:</span>
+            <span class="transferring-filename" id="active-filename">--</span>
+          </div>
+          <div class="progress-track large">
+            <div class="progress-fill anim-pulse" id="active-progress-bar" style="width: 0%;"></div>
+          </div>
+          <div class="transfer-stats">
+            <span id="active-transferred">0 MB / 0 MB</span>
+            <span id="active-speed">0 MB/s</span>
+            <span id="active-eta">ETA: --</span>
+          </div>
+        </div>
+
+        <!-- Transfer History Table -->
+        <div class="table-section">
+          <div class="table-header-row">
+            <h3>Recent Transfers</h3>
+            <span class="stats-counter" id="tool1-stats-counter">0 transferred</span>
+          </div>
+          <div class="table-scroll-container">
+            <table class="data-table" id="transfers-table">
+              <thead>
+                <tr>
+                  <th>Clip Name</th>
+                  <th>Size</th>
+                  <th>Speed</th>
+                  <th>Status</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody id="transfers-tbody">
+                <tr class="empty-row">
+                  <td colspan="5">No files transferred yet. Activate Tool 1 to begin.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TOOL 2: Batch Recording Generator -->
+      <section class="tool-card" id="card-tool2">
+        <div class="card-header">
+          <div class="card-title-group">
+            <div class="tool-badge badge-purple">Tool 2</div>
+            <h2>Batch Video Recorder</h2>
+          </div>
+          <div class="batch-status-badge badge-idle" id="tool2-state-badge">IDLE</div>
+        </div>
+
+        <p class="card-desc">
+          Automated batch generator for debugging. Generates precision video clip series totaling ~1 hour of footage with custom resolution & bitrate.
+        </p>
+
+        <!-- Duration Preset Selection -->
+        <div class="form-group">
+          <div class="label-with-badge">
+            <label>Clip Duration Preset</label>
+            <span class="calc-badge" id="batch-total-calc">Total: 60 clips x 60s = 60m 00s (1.0h)</span>
+          </div>
+          <div class="preset-grid" id="duration-preset-grid">
+            <button class="preset-btn" data-duration="15" data-clips="240">
+              <span class="preset-time">15s</span>
+              <span class="preset-sub">240 clips (~1h)</span>
+            </button>
+            <button class="preset-btn" data-duration="30" data-clips="120">
+              <span class="preset-time">30s</span>
+              <span class="preset-sub">120 clips (~1h)</span>
+            </button>
+            <button class="preset-btn" data-duration="45" data-clips="80">
+              <span class="preset-time">45s</span>
+              <span class="preset-sub">80 clips (~1h)</span>
+            </button>
+            <button class="preset-btn active" data-duration="60" data-clips="60">
+              <span class="preset-time">60s</span>
+              <span class="preset-sub">60 clips (~1h)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Target Clips Option -->
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label for="tool2-clip-count">Target Number of Clips</label>
+            <div class="input-with-stepper">
+              <input type="number" id="tool2-clip-count" class="form-control" min="1" max="5000" value="60" placeholder="e.g. 10, 60, 120">
+            </div>
+          </div>
+          <div class="form-group col-6">
+            <label for="tool2-duration-input">Duration per Clip (seconds)</label>
+            <input type="number" id="tool2-duration-input" class="form-control" min="1" max="3600" value="60">
+          </div>
+        </div>
+
+        <!-- Camera Resolution & Bitrate Selection -->
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label for="tool2-resolution-select">Recording Resolution</label>
+            <select id="tool2-resolution-select" class="form-control">
+              <option value="">Loading camera formats...</option>
+            </select>
+          </div>
+
+          <div class="form-group col-6">
+            <label for="tool2-codec-select">Codec / Bitrate</label>
+            <select id="tool2-codec-select" class="form-control">
+              <option value="">Loading codecs...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Batch Controls -->
+        <div class="controls-row">
+          <button class="btn btn-primary" id="btn-start-batch">
+            <span class="btn-icon">▶</span> Start Batch
+          </button>
+          <button class="btn btn-secondary" id="btn-pause-batch" disabled>
+            <span class="btn-icon">⏸</span> Pause
+          </button>
+          <button class="btn btn-danger" id="btn-stop-batch" disabled>
+            <span class="btn-icon">⏹</span> Abort
+          </button>
+        </div>
+
+        <!-- Batch Progress Monitor -->
+        <div class="batch-monitor-card" id="batch-monitor-card">
+          <div class="monitor-top-row">
+            <div>
+              <span class="monitor-label">Batch Progress:</span>
+              <span class="monitor-value" id="batch-clip-counter">Clip 0 / 60</span>
+            </div>
+            <div>
+              <span class="monitor-label">Elapsed:</span>
+              <span class="monitor-value" id="batch-time-elapsed">00:00 / 60:00</span>
+            </div>
+          </div>
+
+          <!-- Total Batch Progress -->
+          <div class="progress-track large">
+            <div class="progress-fill color-purple" id="batch-total-progress" style="width: 0%;"></div>
+          </div>
+
+          <!-- Current Clip Progress -->
+          <div class="clip-countdown-row">
+            <span class="sub-label">Current Clip Recording:</span>
+            <span class="sub-val" id="batch-clip-countdown">0.0s / 60.0s</span>
+          </div>
+          <div class="progress-track small">
+            <div class="progress-fill color-red" id="batch-clip-progress" style="width: 0%;"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Event & System Logs -->
+    <footer class="system-logs-section">
+      <div class="logs-header">
+        <h3>Live Event & Activity Log</h3>
+        <button class="btn btn-ghost btn-xs" id="btn-clear-logs">Clear Logs</button>
+      </div>
+      <div class="logs-console" id="logs-console">
+        <div class="log-entry log-info">[System] Dashboard loaded. Awaiting telemetry stream...</div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
